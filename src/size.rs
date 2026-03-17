@@ -22,11 +22,11 @@ pub enum SizeParseError {
 impl std::fmt::Display for SizeSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", self.size, match self.unit {
-            SizeUnit::B => "B",
-            SizeUnit::KB => "KB",
-            SizeUnit::MB => "MB",
-            SizeUnit::GB => "GB",
-            SizeUnit::TB => "TB",
+            SizeUnit::B => "b",
+            SizeUnit::KB => "k",
+            SizeUnit::MB => "m",
+            SizeUnit::GB => "g",
+            SizeUnit::TB => "t",
         })
     }
 }
@@ -48,10 +48,10 @@ impl SizeSpec {
         let size = num_part.parse::<f64>().ok()?;
         let unit = match unit_part.trim().to_uppercase().as_str() {
             "B" => SizeUnit::B,
-            "KB" => SizeUnit::KB,
-            "MB" => SizeUnit::MB,
-            "GB" => SizeUnit::GB,
-            "TB" => SizeUnit::TB,
+            "K" => SizeUnit::KB,
+            "M" => SizeUnit::MB,
+            "G" => SizeUnit::GB,
+            "T" => SizeUnit::TB,
             _ => return None,
         };
         Some(SizeSpec { size, unit })
@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn test_size_spec_parse() {
-        let spec = SizeSpec::parse("1.5 GB").unwrap();
+        let spec = SizeSpec::parse("1.5g").unwrap();
         assert_eq!(spec.size, 1.5);
         assert_eq!(spec.unit, SizeUnit::GB);
         assert_eq!(spec.to_bytes(),(1.5 * 1024.0 * 1024.0 * 1024.0) as u64);
