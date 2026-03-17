@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 aws-sdk-glacier = "1.87.0"
+clap = "4.6.0"
