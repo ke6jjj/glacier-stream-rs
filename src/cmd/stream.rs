@@ -50,11 +50,13 @@ impl Cmd {
             let body = ByteStream::from(buffer[..bytes_read].to_vec());
             let range_start = (part_number - 1) * part_size;
             let range_end = range_start + bytes_read as u64 - 1;
+            let range_spec = format!("bytes {}-{}/*", range_start, range_end);
+            eprintln!("Uploading part {} ({} bytes, range {})", part_number, bytes_read, range_spec);
             client.upload_multipart_part()
                 .vault_name(&self.vault)
                 .upload_id(upload_id)
                 .body(body)
-                .range(format!("bytes {}-{}/*", range_start, range_end))
+                .range(range_spec)
                 .send()
                 .await?;
         }
