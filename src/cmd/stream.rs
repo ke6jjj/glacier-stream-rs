@@ -1,6 +1,6 @@
 use crate::size::SizeSpec;
 use crate::result::{Result, Error};
-use std::io::Read;
+use std::io::{self, Read};
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_glacier::client::Client as GlacierClient;
 use aws_sdk_glacier::primitives::ByteStream;
@@ -40,10 +40,10 @@ impl Cmd {
             .upload_id()
             .ok_or_else(|| Error::msg("Failed to initiate multipart upload: missing upload ID"))?;
         eprintln!("Upload initiated. Upload ID: {}", upload_id);
-        let mut buffer = vec![0u8; part_size as usize];
-        let mut stdin_handle = std::io::stdin().lock();
+        let mut buffer = Vec::new();
         for part_number in 1.. {
-            let bytes_read = stdin_handle.read(&mut buffer)?;
+            let mut chunk_reader = io::stdin().take(part_size);
+            let bytes_read = chunk_reader.read_to_end(&mut buffer)?;
             if bytes_read == 0 {
                 break;
             }
