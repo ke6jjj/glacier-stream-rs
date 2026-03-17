@@ -1,7 +1,7 @@
 use crate::size::SizeSpec;
 use crate::result::{Result, Error};
 use std::io::Read;
-use aws_config::BehaviorVersion;
+use aws_config::{BehaviorVersion, Region};
 use aws_sdk_glacier::client::Client as GlacierClient;
 use aws_sdk_glacier::primitives::ByteStream;
 
@@ -24,7 +24,11 @@ impl Cmd {
     pub async fn run(&self) -> Result {
         let part_size = crate::util::part_size_for_size(self.size.to_bytes());
         eprintln!("Using part size: {} bytes", part_size);
-        let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+        let region = Region::new(self.region.clone());
+        let config = aws_config::defaults(BehaviorVersion::latest())
+            .region(region)
+            .load()
+            .await;
         let client = GlacierClient::new(&config);
         let upload = client.initiate_multipart_upload()
             .vault_name(&self.vault)

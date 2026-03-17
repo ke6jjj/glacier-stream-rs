@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use glacier_stream::cmd::stream;
+use glacier_stream::cmd::test;
 
 #[derive(Debug, Parser)]
 #[command(version = env!("CARGO_PKG_VERSION"))]
@@ -12,13 +13,15 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Cmd {
     Stream(stream::Cmd),
+    Test(test::Cmd),
 }
 
 fn main() {
     let cli = Cli::parse();
-    match cli.cmd {
-        Cmd::Stream(stream_cmd) => {
-            println!("Stream command: {:?}", stream_cmd);
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        match cli.cmd {
+            Cmd::Stream(stream_cmd) => { stream_cmd.run().await.unwrap(); },
+            Cmd::Test(test_cmd) => { test_cmd.run().await.unwrap(); },
         }
-    }
+    });
 }
