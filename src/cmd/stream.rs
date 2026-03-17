@@ -1,4 +1,3 @@
-use crate::cmd::Command;
 use crate::size::SizeSpec;
 
 #[derive(Debug, clap::Args)]

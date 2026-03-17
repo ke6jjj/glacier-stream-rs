@@ -7,9 +7,36 @@ pub enum SizeUnit {
     TB,
 }
 
+#[derive(Debug, Clone)]
 pub struct SizeSpec {
     size: f64,
     unit: SizeUnit,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum SizeParseError {
+    #[error("Invalid size specification: {0}")]
+    InvalidFormat(String),
+}
+
+impl std::fmt::Display for SizeSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.size, match self.unit {
+            SizeUnit::B => "B",
+            SizeUnit::KB => "KB",
+            SizeUnit::MB => "MB",
+            SizeUnit::GB => "GB",
+            SizeUnit::TB => "TB",
+        })
+    }
+}
+
+impl std::str::FromStr for SizeSpec {
+    type Err = SizeParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s).ok_or_else(|| SizeParseError::InvalidFormat(s.into()))
+    }
 }
 
 impl SizeSpec {
@@ -52,5 +79,10 @@ mod tests {
         assert_eq!(spec.size, 1.5);
         assert_eq!(spec.unit, SizeUnit::GB);
         assert_eq!(spec.to_bytes(),(1.5 * 1024.0 * 1024.0 * 1024.0) as u64);
+    }
+
+    #[test]
+    fn test_size_spec_parse_error() {
+        assert!(SizeSpec::parse("invalid").is_none());
     }
 }
