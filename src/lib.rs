@@ -1,2 +1,2 @@
-mod size;
-mod cmd;
+pub mod size;
+pub mod cmd;
