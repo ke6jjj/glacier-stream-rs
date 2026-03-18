@@ -14,6 +14,9 @@ pub struct Cmd {
     /// Number of concurrent upload workers. Default: 4
     #[arg(short, long, default_value_t = 4)]
     workers: usize,
+    /// Be verbose. Prints additional information about the upload process.
+    #[arg(short, long)]
+    verbose: bool,
 
     /// AWS region in which the destination vault resides. Example: us-west-1
     region: String,
@@ -38,16 +41,25 @@ impl Cmd {
     pub async fn run(&self) -> Result {
         let client = self.get_client().await?;
         let part_size = crate::util::part_size_for_size(self.size.to_bytes());
-        eprintln!("Using part size: {} bytes", part_size);
+        if self.verbose {
+            eprintln!("Estimated upload size: {} bytes", self.size.to_bytes());
+        }
+        if self.verbose {
+            eprintln!("Using part size: {} bytes", part_size);
+        }
         let upload = self.initiate_upload(&client, part_size).await?;
         let upload_id = upload
             .upload_id()
             .ok_or_else(|| Error::msg("Failed to initiate multipart upload: missing upload ID"))?;
         eprintln!("Upload initiated. Upload ID: {}", upload_id);
-        eprint!("Using {} workers.", self.workers);
+        if self.verbose {
+            eprint!("Using {} workers.", self.workers);
+        }
         self.upload(part_size, &client, upload_id).await?;
         self.complete_upload(&client, upload_id).await?;
-        eprintln!("Upload complete.");
+        if self.verbose {
+            eprintln!("Upload complete.");
+        }
         Ok(())
     }
 
