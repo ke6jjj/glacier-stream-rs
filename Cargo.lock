@@ -859,6 +859,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-glacier",
  "clap",
+ "hex",
  "thiserror 2.0.18",
  "tokio",
  "tokio-mpmc",
