@@ -88,6 +88,7 @@ impl Cmd {
         let mut worker_tasks = spawn_workers(self.workers, client, upload_id.to_string(), self.vault.clone(), rx);
         let mut buffer = Vec::new();
         for part_number in 1.. {
+            buffer.clear(); // Reuse buffer; otherwise read_to_end appends and memory grows without bound.
             let mut chunk_reader = io::stdin().take(part_size);
             let bytes_read = chunk_reader.read_to_end(&mut buffer)?;
             if bytes_read == 0 {
