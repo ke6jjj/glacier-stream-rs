@@ -1,14 +1,21 @@
 use crate::size::SizeSpec;
 use crate::result::{Result, Error};
+use std::f32::consts::E;
 use std::io::{self, Read};
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_glacier::client::Client as GlacierClient;
 use aws_sdk_glacier::primitives::ByteStream;
 use aws_sdk_glacier::operation::initiate_multipart_upload::InitiateMultipartUploadOutput;
+use tokio_mpmc::channel;
+use tokio::task::JoinSet;
 
 /// Stream data to a Glacier vault.
 #[derive(Debug, clap::Args)]
 pub struct Cmd {
+    /// Number of concurrent upload workers. Default: 4
+    #[arg(short, long, default_value_t = 4)]
+    workers: usize,
+
     /// AWS region in which the destination vault resides. Example: us-west-1
     region: String,
     /// Destination vault identifier. NOT FULL ARN, only last part. 
@@ -21,6 +28,13 @@ pub struct Cmd {
     size: SizeSpec,
 }
 
+#[derive(Debug)]
+struct UploadPart {
+    range_start: u64,
+    range_end: u64,
+    body: ByteStream,
+}
+
 impl Cmd {
     pub async fn run(&self) -> Result {
         let client = self.get_client().await?;
@@ -31,6 +45,7 @@ impl Cmd {
             .upload_id()
             .ok_or_else(|| Error::msg("Failed to initiate multipart upload: missing upload ID"))?;
         eprintln!("Upload initiated. Upload ID: {}", upload_id);
+        eprint!("Using {} workers.", self.workers);
         self.upload(part_size, &client, upload_id).await?;
         self.complete_upload(&client, upload_id).await?;
         eprintln!("Upload complete.");
@@ -59,6 +74,14 @@ impl Cmd {
 
     async fn upload(&self, part_size: u64, client: &GlacierClient, upload_id: &str) -> Result {
         let mut buffer = Vec::new();
+        let (tx, rx) = channel::<UploadPart>(self.workers);
+        let mut worker_tasks = JoinSet::new();
+        for _ in 0..self.workers {
+            let client_clone = client.clone();
+            let vault_clone = self.vault.clone();
+            let upload_id_clone = upload_id.to_string();
+            worker_tasks.spawn(upload_worker(rx.clone(), client_clone, vault_clone, upload_id_clone));
+        }
         for part_number in 1.. {
             let mut chunk_reader = io::stdin().take(part_size);
             let bytes_read = chunk_reader.read_to_end(&mut buffer)?;
@@ -68,15 +91,15 @@ impl Cmd {
             let body = ByteStream::from(buffer[..bytes_read].to_vec());
             let range_start = (part_number - 1) * part_size;
             let range_end = range_start + bytes_read as u64 - 1;
-            let range_spec = format!("bytes {}-{}/*", range_start, range_end);
-            client.upload_multipart_part()
-                .vault_name(&self.vault)
-                .upload_id(upload_id)
-                .body(body)
-                .range(range_spec)
-                .send()
-                .await?;
+            let part = UploadPart {
+                range_start,
+                range_end,
+                body,
+            };
+            tx.send(part).await?;
         }
+        drop(tx);
+        while worker_tasks.join_next().await.is_some() {}
         Ok(())
     }
 
@@ -88,4 +111,18 @@ impl Cmd {
             .await?;
         Ok(())
     }
+}
+
+async fn upload_worker<'a>(chan:tokio_mpmc::Receiver<UploadPart>, client: GlacierClient, vault: String, upload_id: String) -> Result {
+    while let Some(part) = chan.recv().await? {
+        let range_spec = format!("bytes {}-{}/*", part.range_start, part.range_end);
+        client.upload_multipart_part()
+            .vault_name(&vault)
+            .upload_id(&upload_id)
+            .body(part.body)
+            .range(range_spec)
+            .send()
+            .await?;
+    }
+    Ok(())
 }
