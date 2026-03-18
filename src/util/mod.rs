@@ -1,5 +1,12 @@
+pub mod arn;
+pub mod vault;
+pub mod client;
+
+// Compute the best multipart upload part size for a given total archive size.
 pub fn part_size_for_size(size: u64) -> u64 {
+    // Glacier requires that the part size be at least one MiB.
     let min_part_size = 1024 * 1024; // 1 MiB
+    // Glacier allows a maximum of 10_000 parts.
     let max_parts = 10000;
     let part_size = (size + max_parts - 1) / max_parts; // Round up division
     part_size.next_power_of_two().max(min_part_size)
@@ -7,8 +14,6 @@ pub fn part_size_for_size(size: u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use core::num;
-
     use super::*;
 
     #[test]

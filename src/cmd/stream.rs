@@ -1,7 +1,8 @@
 use crate::size::SizeSpec;
 use crate::result::{Result, Error};
+use crate::util::vault::{GlacierVaultSpec, parse_glacier_vault_arn};
+use crate::util::client::get_client;
 use std::io::{self, Read};
-use aws_config::{BehaviorVersion, Region};
 use aws_sdk_glacier::client::Client as GlacierClient;
 use aws_sdk_glacier::primitives::ByteStream;
 use aws_sdk_glacier::operation::initiate_multipart_upload::InitiateMultipartUploadOutput;
@@ -17,18 +18,17 @@ pub struct Cmd {
     /// Be verbose. Prints additional information about the upload process.
     #[arg(short, long)]
     verbose: bool,
-
-    /// AWS region in which the destination vault resides. Example: us-west-1
-    region: String,
-    /// Destination vault identifier. NOT FULL ARN, only last part. 
-    /// Example: photos-audio
-    vault: String,
+    #[arg(value_parser = parse_glacier_vault_arn)]
+    /// ARN for the destination vault.
+    /// Example: arn:aws:glacier:us-east-2:123456789012:vaults/video-archives
+    arn: GlacierVaultSpec,
     /// A description of the archive being uploaded.
     description: String,
     /// Estimated size of upload. Human readable sizes are supported.
     /// Units: b, k, m, g, and t. Example: 1.1t
     size: SizeSpec,
 }
+
 
 #[derive(Debug)]
 struct UploadPart {
@@ -39,7 +39,7 @@ struct UploadPart {
 
 impl Cmd {
     pub async fn run(&self) -> Result {
-        let client = self.get_client().await?;
+        let client = get_client(&self.arn).await;
         let part_size = crate::util::part_size_for_size(self.size.to_bytes());
         if self.verbose {
             eprintln!("Estimated upload size: {} bytes", self.size.to_bytes());
@@ -63,19 +63,9 @@ impl Cmd {
         Ok(())
     }
 
-    async fn get_client(&self) -> Result<GlacierClient> {
-        let region = Region::new(self.region.clone());
-        let config = aws_config::defaults(BehaviorVersion::latest())
-            .region(region)
-            .load()
-            .await;
-        let client = GlacierClient::new(&config);
-        Ok(client)
-    }
-
     async fn initiate_upload(&self, client: &GlacierClient, part_size: u64) -> Result<InitiateMultipartUploadOutput> {
         let upload = client.initiate_multipart_upload()
-            .vault_name(&self.vault)
+            .vault_name(&self.arn.vault_name().to_owned())
             .part_size(part_size.to_string())
             .archive_description(&self.description)
             .send()
@@ -85,7 +75,7 @@ impl Cmd {
 
     async fn upload(&self, part_size: u64, client: &GlacierClient, upload_id: &str) -> Result {
         let (tx, rx) = channel::<UploadPart>(self.workers);
-        let mut worker_tasks = spawn_workers(self.workers, client, upload_id.to_string(), self.vault.clone(), rx);
+        let mut worker_tasks = spawn_workers(self.workers, client, upload_id.to_string(), self.arn.vault_name().to_owned(), rx);
         let mut buffer = Vec::new();
         for part_number in 1.. {
             buffer.clear(); // Reuse buffer; otherwise read_to_end appends and memory grows without bound.
@@ -111,7 +101,7 @@ impl Cmd {
 
     async fn complete_upload(&self, client: &GlacierClient, upload_id: &str) -> Result {
         client.complete_multipart_upload()
-            .vault_name(&self.vault)
+            .vault_name(&self.arn.vault_name().to_owned())
             .upload_id(upload_id)
             .send()
             .await?;
