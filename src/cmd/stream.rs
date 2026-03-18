@@ -1,6 +1,5 @@
 use crate::size::SizeSpec;
 use crate::result::{Result, Error};
-use std::f32::consts::E;
 use std::io::{self, Read};
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_glacier::client::Client as GlacierClient;
