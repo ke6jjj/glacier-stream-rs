@@ -84,15 +84,9 @@ impl Cmd {
     }
 
     async fn upload(&self, part_size: u64, client: &GlacierClient, upload_id: &str) -> Result {
-        let mut buffer = Vec::new();
         let (tx, rx) = channel::<UploadPart>(self.workers);
-        let mut worker_tasks = JoinSet::new();
-        for _ in 0..self.workers {
-            let client_clone = client.clone();
-            let vault_clone = self.vault.clone();
-            let upload_id_clone = upload_id.to_string();
-            worker_tasks.spawn(upload_worker(rx.clone(), client_clone, vault_clone, upload_id_clone));
-        }
+        let mut worker_tasks = spawn_workers(self.workers, client, upload_id.to_string(), self.vault.clone(), rx);
+        let mut buffer = Vec::new();
         for part_number in 1.. {
             let mut chunk_reader = io::stdin().take(part_size);
             let bytes_read = chunk_reader.read_to_end(&mut buffer)?;
@@ -136,4 +130,15 @@ async fn upload_worker<'a>(chan:tokio_mpmc::Receiver<UploadPart>, client: Glacie
             .await?;
     }
     Ok(())
+}
+
+fn spawn_workers(workers: usize, client: &GlacierClient, upload_id: String, vault: String, chan: tokio_mpmc::Receiver<UploadPart>) -> JoinSet<Result> {
+        let mut worker_tasks =JoinSet::new();
+        for _ in 0..workers {
+            let client_clone = client.clone();
+            let vault_clone = vault.clone();
+            let upload_id_clone = upload_id.to_string();
+            worker_tasks.spawn(upload_worker(chan.clone(), client_clone, vault_clone, upload_id_clone));
+        }
+        worker_tasks
 }
