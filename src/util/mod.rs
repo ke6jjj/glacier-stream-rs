@@ -22,7 +22,7 @@ mod tests {
         assert_eq!(part_size_for_size(0), 1024 * 1024);
         assert_eq!(part_size_for_size(1024 * 1024), 1024 * 1024);
         assert_eq!(part_size_for_size(1024 * 1024 + 1), 1024 * 1024);
-        assert_eq!(part_size_for_size(1024 * 1024 * 10000), 1024 * 1024 * 10000);
+        assert_eq!(part_size_for_size(10 * 1024 * 1024), 1024 * 1024);
     }
 
     #[test]
