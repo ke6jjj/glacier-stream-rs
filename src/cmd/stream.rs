@@ -260,9 +260,7 @@ impl Cmd {
         let tx = uploader.work_tx_queue();
         let abort = uploader.abort_rx_queue();
         let total_size = self.read_worker(upload_context, tx, abort).await?;
-        eprint!("Finished reading input. Waiting for upload workers to complete...");
         let checksum = uploader.finish().await?;
-        eprint!("Upload workers complete. Finalizing upload...");
         self.complete_upload(upload_context, checksum, total_size)
             .await?;
         Ok(())
