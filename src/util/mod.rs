@@ -9,7 +9,7 @@ pub fn part_size_for_size(size: u64) -> u64 {
     let min_part_size = 1024 * 1024; // 1 MiB
     // Glacier allows a maximum of 10_000 parts.
     let max_parts = 10000;
-    let part_size = (size + max_parts - 1) / max_parts; // Round up division
+    let part_size = size.div_ceil(max_parts); // Round up division
     part_size.next_power_of_two().max(min_part_size)
 }
 

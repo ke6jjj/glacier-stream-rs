@@ -156,7 +156,7 @@ async fn upload_worker<'a>(work_context: UploadWorkerContext) -> EasyResult<()> 
     let res = upload_loop(work_context.clone()).await;
     if let Err(e) = res {
         work_context.abort_semaphore.send(()).await?;
-        return Err(e.into());
+        return Err(e);
     }
     Ok(())
 }
@@ -189,7 +189,7 @@ async fn tree_hash_worker(chan: ResultRxChannel, abort_chan: AbortTxChannel, par
     let res = tree_hash_loop(chan, &mut tree_hash).await;
     if let Err(e) = res {
         abort_chan.send(()).await?;
-        return Err(e.into());
+        return Err(e);
     }
     tree_hash.compute_hash().map_err(|e| e.into())
 }
@@ -215,9 +215,9 @@ impl Cmd {
         let client = get_client(&self.arn).await;
         let upload_id = self.initiate_upload(&client, part_size).await?;
         let context = UploadContext {
-            client: client,
+            client,
             vault: self.arn.vault_name().to_owned(),
-            upload_id: upload_id,
+            upload_id,
             part_size,
         };
         eprintln!("Upload ID: {}", context.upload_id);
@@ -233,7 +233,7 @@ impl Cmd {
 
     async fn initiate_upload(&self, client: &GlacierClient, part_size: u64) -> EasyResult<String> {
         let upload = client.initiate_multipart_upload()
-            .vault_name(&self.arn.vault_name().to_owned())
+            .vault_name(self.arn.vault_name().to_owned())
             .part_size(part_size.to_string())
             .archive_description(&self.description)
             .send()

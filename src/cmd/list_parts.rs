@@ -36,8 +36,8 @@ impl TryFrom<&str> for Range {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut parts = value.split('-');
-        let start_str = parts.next().ok_or_else(|| RangeParseError::InvalidFormat)?;
-        let end_str = parts.next().ok_or_else(|| RangeParseError::InvalidFormat)?;
+        let start_str = parts.next().ok_or(RangeParseError::InvalidFormat)?;
+        let end_str = parts.next().ok_or(RangeParseError::InvalidFormat)?;
         let start = start_str.parse::<u64>()?;
         let end = end_str.parse::<u64>()?;
         Ok(Range { start, end })
@@ -67,9 +67,9 @@ impl TryFrom<&PartListElement> for Part {
     type Error = PartListParseError;
 
     fn try_from(value: &PartListElement) -> Result<Self, Self::Error> {
-        let range_str = value.range_in_bytes().ok_or_else(|| PartListParseError::MissingRange)?;
+        let range_str = value.range_in_bytes().ok_or(PartListParseError::MissingRange)?;
         let range = Range::try_from(range_str)?;
-        let hash_str = value.sha256_tree_hash().ok_or_else(|| PartListParseError::MissingHash)?;
+        let hash_str = value.sha256_tree_hash().ok_or(PartListParseError::MissingHash)?;
         let hash_bytes = hex::decode(hash_str)?;
         if hash_bytes.len() != 32 {
             return Err(PartListParseError::InvalidHashLength);
@@ -87,7 +87,7 @@ impl Cmd {
         let mut next_marker = None;
         loop {
             let output = client.list_parts()
-                .vault_name(&self.arn.vault_name().to_owned())
+                .vault_name(self.arn.vault_name().to_owned())
                 .upload_id(&self.upload_id)
                 .set_marker(next_marker.clone())
                 .send()
@@ -96,7 +96,7 @@ impl Cmd {
                 output
                 .parts()
                 .iter()
-                .map(|p| Part::try_from(p)).collect();
+                .map(Part::try_from).collect();
             let mut parsed_parts = part_results
                 .into_iter()
                 .collect::<Result<Vec<Part>, PartListParseError>>()?;

@@ -53,7 +53,7 @@ impl TreeHash {
         if self.map_by_start.contains_key(&start) {
             return Err(TreeHashError::LeafOverlap { start, stop });
         }
-        if start % self.part_size != 0 {
+        if !start.is_multiple_of(self.part_size) {
             return Err(TreeHashError::UnalignedLeafStart(start));
         }
         let size = stop - start;

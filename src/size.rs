@@ -44,7 +44,7 @@ impl SizeSpec {
         let s = s.trim();
         let (num_part, unit_part) = s
             .chars()
-            .partition::<String, _>(|c| c.is_digit(10) || *c == '.');
+            .partition::<String, _>(|c| c.is_ascii_digit() || *c == '.');
         let size = num_part.parse::<f64>().ok()?;
         let unit = match unit_part.trim().to_uppercase().as_str() {
             "B" => SizeUnit::B,
