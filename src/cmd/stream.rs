@@ -163,7 +163,7 @@ async fn upload_worker<'a>(work_context: UploadWorkerContext) -> EasyResult<()> 
 async fn upload_loop(work_context: UploadWorkerContext) -> EasyResult<()> {
     while let Some(part) = work_context.work_queue.recv().await? {
         let range_spec = format!("bytes {}-{}/*", part.range_start, part.range_end);
-        eprintln!("Worker uploading range: {}", range_spec);
+        eprintln!("Worker uploading range: {}", part.range_start);
         let result = work_context
             .upload
             .client
@@ -174,7 +174,7 @@ async fn upload_loop(work_context: UploadWorkerContext) -> EasyResult<()> {
             .range(range_spec)
             .send()
             .await?;
-        eprintln!("Worker uploadED range: {}", range_spec);
+        eprintln!("Worker uploadED range: {}", part.range_start);
         let checksum_hex = result
             .checksum()
             .ok_or_else(|| EasyError::msg("Upload part response missing checksum"))?;
@@ -186,11 +186,11 @@ async fn upload_loop(work_context: UploadWorkerContext) -> EasyResult<()> {
                 .try_into()
                 .map_err(|_| EasyError::msg("Invalid checksum length"))?,
         };
-        eprintln!("Worker sending checksum for range: {}", range_spec);
+        eprintln!("Worker sending checksum for range: {}", part.range_start);
         work_context.result_queue.send(report).await?;
-        eprintln!("Worker sent checksum for range: {}", range_spec);
+        eprintln!("Worker sent checksum for range: {}", part.range_start);
     }
-    eprintln!("Worker finished receiving work. Exiting.");)
+    eprintln!("Worker finished receiving work. Exiting.");
     Ok(())
 }
 
