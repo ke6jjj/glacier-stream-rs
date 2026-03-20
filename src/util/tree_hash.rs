@@ -3,31 +3,31 @@ use thiserror::Error;
 
 #[derive(Debug)]
 pub struct HashLeaf {
-    pub start: usize,
-    pub stop: usize,
+    pub start: u64,
+    pub stop: u64,
     pub hash: [u8; 32],
 }
 
 pub struct TreeHash {
     have_end_leaf: bool,
-    part_size: usize,
-    map_by_start: std::collections::HashMap<usize, HashLeaf>,
+    part_size: u64,
+    map_by_start: std::collections::HashMap<u64, HashLeaf>,
 }
 
 #[derive(Debug, Error)]
 pub enum TreeHashError {
     #[error("Invalid range: start {start} stop {stop}")]
-    InvalidRange { start: usize, stop: usize },
+    InvalidRange { start: u64, stop: u64 },
     #[error("Leaf overlap at start {start} stop {stop}")]
-    LeafOverlap { start: usize, stop: usize },
+    LeafOverlap { start: u64, stop: u64 },
     #[error("Leaf too big")]
     LeafTooBig,
     #[error("Unaligned leaf start at {0}")]
-    UnalignedLeafStart(usize),
+    UnalignedLeafStart(u64),
     #[error("Multiple short leaves encountered")]
     MultipleShortLeaves,
     #[error("Data gap between leaves at start {start} stop {stop}")]
-    DataGap { start: usize, stop: usize },
+    DataGap { start: u64, stop: u64 },
     #[error("Empty tree cannot compute hash")]
     EmptyTree,
 }
@@ -38,7 +38,7 @@ struct HashDepth {
 }
 
 impl TreeHash {
-    pub fn new(part_size: usize) -> Self {
+    pub fn new(part_size: u64) -> Self {
         TreeHash {
             have_end_leaf: false,
             part_size,
@@ -46,7 +46,7 @@ impl TreeHash {
         }
     }
 
-    pub fn try_insert(&mut self, start: usize, stop: usize, hash: [u8; 32]) -> Result<(), TreeHashError> {
+    pub fn try_insert(&mut self, start: u64, stop: u64, hash: [u8; 32]) -> Result<(), TreeHashError> {
         if start >= stop {
             return Err(TreeHashError::InvalidRange { start, stop });
         }
