@@ -1,5 +1,5 @@
-use thiserror::Error;
 use super::arn::AWSResource;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct GlacierVaultSpec {
@@ -53,7 +53,8 @@ impl TryFrom<&str> for GlacierVaultSpec {
     type Error = GlacierVaultARNError;
 
     fn try_from(arn: &str) -> Result<Self, Self::Error> {
-        let resource = AWSResource::try_from(arn).map_err(|_| GlacierVaultARNError::NotGlacierVault)?;
+        let resource =
+            AWSResource::try_from(arn).map_err(|_| GlacierVaultARNError::NotGlacierVault)?;
         Self::try_from(&resource)
     }
 }

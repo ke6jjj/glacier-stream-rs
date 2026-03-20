@@ -1,14 +1,14 @@
+use crate::result::{Error as EasyError, Result as EasyResult};
 use crate::size::SizeSpec;
-use crate::result::{Result as EasyResult, Error as EasyError};
-use crate::util::vault::{GlacierVaultSpec, parse_glacier_vault_arn};
 use crate::util::client::get_client;
 use crate::util::tree_hash::TreeHash;
-use std::io::{self, Read};
+use crate::util::vault::{GlacierVaultSpec, parse_glacier_vault_arn};
 use aws_sdk_glacier::client::Client as GlacierClient;
 use aws_sdk_glacier::primitives::ByteStream;
-use tokio_mpmc::channel;
-use tokio::task::JoinSet;
+use std::io::{self, Read};
 use thiserror::Error;
+use tokio::task::JoinSet;
+use tokio_mpmc::channel;
 
 /// Stream data to a Glacier vault.
 #[derive(Debug, clap::Args)]
@@ -133,13 +133,11 @@ impl<'a> UploadManager {
             };
             self.worker_tasks.spawn(upload_worker(work_context.clone()));
         }
-        self.hash_task.spawn(
-            tree_hash_worker(
-                self.result_channel.1.clone(),
-                self.abort_channel.0.clone(), 
-                self.upload_context.part_size
-            )
-        );
+        self.hash_task.spawn(tree_hash_worker(
+            self.result_channel.1.clone(),
+            self.abort_channel.0.clone(),
+            self.upload_context.part_size,
+        ));
     }
 
     pub async fn finish(mut self) -> EasyResult<[u8; 32]> {
@@ -164,27 +162,37 @@ async fn upload_worker<'a>(work_context: UploadWorkerContext) -> EasyResult<()> 
 async fn upload_loop(work_context: UploadWorkerContext) -> EasyResult<()> {
     while let Some(part) = work_context.work_queue.recv().await? {
         let range_spec = format!("bytes {}-{}/*", part.range_start, part.range_end);
-        let result = work_context.upload.client.upload_multipart_part()
+        let result = work_context
+            .upload
+            .client
+            .upload_multipart_part()
             .vault_name(&work_context.upload.vault)
             .upload_id(&work_context.upload.upload_id)
             .body(part.body)
             .range(range_spec)
             .send()
             .await?;
-        let checksum_hex = result.checksum()
+        let checksum_hex = result
+            .checksum()
             .ok_or_else(|| EasyError::msg("Upload part response missing checksum"))?;
         let checksum_bytes = hex::decode(checksum_hex)?;
         let report = UploadResult {
             range_start: part.range_start,
             range_end: part.range_end,
-            checksum: checksum_bytes.try_into().map_err(|_| EasyError::msg("Invalid checksum length"))?,
+            checksum: checksum_bytes
+                .try_into()
+                .map_err(|_| EasyError::msg("Invalid checksum length"))?,
         };
         work_context.result_queue.send(report).await?;
     }
     Ok(())
 }
 
-async fn tree_hash_worker(chan: ResultRxChannel, abort_chan: AbortTxChannel, part_size: u64) -> EasyResult<[u8; 32]> {
+async fn tree_hash_worker(
+    chan: ResultRxChannel,
+    abort_chan: AbortTxChannel,
+    part_size: u64,
+) -> EasyResult<[u8; 32]> {
     let mut tree_hash = TreeHash::new(part_size);
     let res = tree_hash_loop(chan, &mut tree_hash).await;
     if let Err(e) = res {
@@ -196,8 +204,7 @@ async fn tree_hash_worker(chan: ResultRxChannel, abort_chan: AbortTxChannel, par
 
 async fn tree_hash_loop(chan: ResultRxChannel, tree_hash: &mut TreeHash) -> EasyResult {
     while let Some(part) = chan.recv().await? {
-        tree_hash.
-            try_insert(part.range_start, part.range_end + 1, part.checksum)?;
+        tree_hash.try_insert(part.range_start, part.range_end + 1, part.checksum)?;
     }
     Ok(())
 }
@@ -232,15 +239,16 @@ impl Cmd {
     }
 
     async fn initiate_upload(&self, client: &GlacierClient, part_size: u64) -> EasyResult<String> {
-        let upload = client.initiate_multipart_upload()
+        let upload = client
+            .initiate_multipart_upload()
             .vault_name(self.arn.vault_name().to_owned())
             .part_size(part_size.to_string())
             .archive_description(&self.description)
             .send()
             .await?;
-        let upload_id = upload
-            .upload_id()
-            .ok_or_else(|| EasyError::msg("Failed to initiate multipart upload: missing upload ID"))?;
+        let upload_id = upload.upload_id().ok_or_else(|| {
+            EasyError::msg("Failed to initiate multipart upload: missing upload ID")
+        })?;
         Ok(upload_id.to_string())
     }
 
@@ -252,11 +260,17 @@ impl Cmd {
         let abort = uploader.abort_rx_queue();
         let total_size = self.read_worker(upload_context, tx, abort).await?;
         let checksum = uploader.finish().await?;
-        self.complete_upload(upload_context, checksum, total_size).await?;
+        self.complete_upload(upload_context, checksum, total_size)
+            .await?;
         Ok(())
     }
 
-    async fn read_worker(&self, upload_context: &UploadContext, tx: &WorkTxChannel, abort: &AbortRxChannel) -> Result<u64, ReadWorkerError> {
+    async fn read_worker(
+        &self,
+        upload_context: &UploadContext,
+        tx: &WorkTxChannel,
+        abort: &AbortRxChannel,
+    ) -> Result<u64, ReadWorkerError> {
         let mut buffer = Vec::new();
         let mut total_read: u64 = 0;
         loop {
@@ -279,13 +293,22 @@ impl Cmd {
                 body,
             };
             total_read += bytes_read as u64;
-            tx.send(part).await.map_err(|_| ReadWorkerError::SendWorkFailed)?;
+            tx.send(part)
+                .await
+                .map_err(|_| ReadWorkerError::SendWorkFailed)?;
         }
         Ok(total_read)
     }
 
-    async fn complete_upload(&self, upload_context: &UploadContext, checksum: [u8; 32], total_size: u64) -> EasyResult<()> {
-        upload_context.client.complete_multipart_upload()
+    async fn complete_upload(
+        &self,
+        upload_context: &UploadContext,
+        checksum: [u8; 32],
+        total_size: u64,
+    ) -> EasyResult<()> {
+        upload_context
+            .client
+            .complete_multipart_upload()
             .vault_name(&upload_context.vault)
             .upload_id(&upload_context.upload_id)
             .archive_size(total_size.to_string())
@@ -295,5 +318,3 @@ impl Cmd {
         Ok(())
     }
 }
-
-

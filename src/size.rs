@@ -21,13 +21,18 @@ pub enum SizeParseError {
 
 impl std::fmt::Display for SizeSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.size, match self.unit {
-            SizeUnit::B => "b",
-            SizeUnit::KB => "k",
-            SizeUnit::MB => "m",
-            SizeUnit::GB => "g",
-            SizeUnit::TB => "t",
-        })
+        write!(
+            f,
+            "{} {}",
+            self.size,
+            match self.unit {
+                SizeUnit::B => "b",
+                SizeUnit::KB => "k",
+                SizeUnit::MB => "m",
+                SizeUnit::GB => "g",
+                SizeUnit::TB => "t",
+            }
+        )
     }
 }
 
@@ -78,7 +83,7 @@ mod tests {
         let spec = SizeSpec::parse("1.5g").unwrap();
         assert_eq!(spec.size, 1.5);
         assert_eq!(spec.unit, SizeUnit::GB);
-        assert_eq!(spec.to_bytes(),(1.5 * 1024.0 * 1024.0 * 1024.0) as u64);
+        assert_eq!(spec.to_bytes(), (1.5 * 1024.0 * 1024.0 * 1024.0) as u64);
     }
 
     #[test]

@@ -1,6 +1,6 @@
-use aws_sdk_glacier::client::Client as GlacierClient;
-use aws_config::{BehaviorVersion, Region};
 use super::vault::GlacierVaultSpec;
+use aws_config::{BehaviorVersion, Region};
+use aws_sdk_glacier::client::Client as GlacierClient;
 
 pub async fn get_client(vault_spec: &GlacierVaultSpec) -> GlacierClient {
     let region = Region::new(vault_spec.region().to_owned());

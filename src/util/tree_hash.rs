@@ -1,4 +1,4 @@
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -46,7 +46,12 @@ impl TreeHash {
         }
     }
 
-    pub fn try_insert(&mut self, start: u64, stop: u64, hash: [u8; 32]) -> Result<(), TreeHashError> {
+    pub fn try_insert(
+        &mut self,
+        start: u64,
+        stop: u64,
+        hash: [u8; 32],
+    ) -> Result<(), TreeHashError> {
         if start >= stop {
             return Err(TreeHashError::InvalidRange { start, stop });
         }
@@ -81,23 +86,35 @@ impl TreeHash {
         // Ensure that the leaves are non-overlapping and cover the range from 0 to the end of the last leaf
         for leaf in &leaves {
             if leaf.start < last_stop {
-                return Err(TreeHashError::LeafOverlap { start: leaf.start, stop: leaf.stop });
+                return Err(TreeHashError::LeafOverlap {
+                    start: leaf.start,
+                    stop: leaf.stop,
+                });
             }
             if leaf.start > last_stop {
-                return Err(TreeHashError::DataGap { start: last_stop, stop: leaf.start });
+                return Err(TreeHashError::DataGap {
+                    start: last_stop,
+                    stop: leaf.start,
+                });
             }
             last_stop = leaf.stop;
         }
         let mut stack: Vec<HashDepth> = Vec::new();
         for leaf in leaves {
-            let mut current = HashDepth { hash: leaf.hash, depth: 0 };
+            let mut current = HashDepth {
+                hash: leaf.hash,
+                depth: 0,
+            };
             while let Some(top) = stack.last() {
                 if top.depth == current.depth {
                     let left = stack.pop().unwrap();
                     let mut hasher = Sha256::new();
                     hasher.update(left.hash);
                     hasher.update(current.hash);
-                    current = HashDepth { hash: hasher.finalize().into(), depth: left.depth + 1 };
+                    current = HashDepth {
+                        hash: hasher.finalize().into(),
+                        depth: left.depth + 1,
+                    };
                 } else {
                     break;
                 }
@@ -110,7 +127,10 @@ impl TreeHash {
             let mut hasher = Sha256::new();
             hasher.update(left.hash);
             hasher.update(right.hash);
-            stack.push(HashDepth { hash: hasher.finalize().into(), depth: left.depth + 1 });
+            stack.push(HashDepth {
+                hash: hasher.finalize().into(),
+                depth: left.depth + 1,
+            });
         }
 
         // Placeholder for hash computation logic
