@@ -142,6 +142,7 @@ impl<'a> UploadManager {
 
     pub async fn finish(mut self) -> EasyResult<[u8; 32]> {
         self.work_channel.0.close();
+        self.result_channel.0.close();
         let results = self.worker_tasks.join_all().await;
         for result in results {
             result?;
