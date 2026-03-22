@@ -4,6 +4,7 @@ use crate::util::client::get_client;
 use crate::util::tree_hash::TreeHash;
 use crate::util::vault::{GlacierVaultSpec, parse_glacier_vault_arn};
 use aws_sdk_glacier::client::Client as GlacierClient;
+use aws_sdk_glacier::operation::complete_multipart_upload::CompleteMultipartUploadOutput;
 use aws_sdk_glacier::primitives::ByteStream;
 use std::io::{self, Read};
 use thiserror::Error;
@@ -232,10 +233,11 @@ impl Cmd {
         if self.verbose {
             eprint!("Using {} workers.", self.workers);
         }
-        self.upload(&context).await?;
+        let result = self.upload(&context).await?;
         if self.verbose {
-            eprintln!("Upload complete.");
+            eprint!("Archive tree checksum: {}", result.checksum().unwrap_or("??NOT-PRESENT??"));
         }
+        eprint!("Archive ID: {}", result.archive_id().unwrap_or("??NOT-PRESENT??"));
         Ok(())
     }
 
@@ -253,7 +255,7 @@ impl Cmd {
         Ok(upload_id.to_string())
     }
 
-    async fn upload(&self, upload_context: &UploadContext) -> EasyResult<()> {
+    async fn upload(&self, upload_context: &UploadContext) -> EasyResult<CompleteMultipartUploadOutput> {
         let mut uploader = UploadManager::new(self.workers, upload_context);
 
         uploader.start().await;
@@ -261,9 +263,9 @@ impl Cmd {
         let abort = uploader.abort_rx_queue();
         let total_size = self.read_worker(upload_context, tx, abort).await?;
         let checksum = uploader.finish().await?;
-        self.complete_upload(upload_context, checksum, total_size)
+        let output = self.complete_upload(upload_context, checksum, total_size)
             .await?;
-        Ok(())
+        Ok(output)
     }
 
     async fn read_worker(
@@ -306,8 +308,8 @@ impl Cmd {
         upload_context: &UploadContext,
         checksum: [u8; 32],
         total_size: u64,
-    ) -> EasyResult<()> {
-        upload_context
+    ) -> EasyResult<CompleteMultipartUploadOutput> {
+        let x = upload_context
             .client
             .complete_multipart_upload()
             .vault_name(&upload_context.vault)
@@ -316,6 +318,6 @@ impl Cmd {
             .checksum(hex::encode(checksum))
             .send()
             .await?;
-        Ok(())
+        Ok(x)
     }
 }
