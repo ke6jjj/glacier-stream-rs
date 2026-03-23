@@ -11,7 +11,7 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use tokio_mpmc::channel;
 
-/// Stream data to a Glacier vault.
+/// Stream data to a Glacier vault from stdin.
 #[derive(Debug, clap::Args)]
 pub struct Cmd {
     /// Number of concurrent upload workers. Default: 4
