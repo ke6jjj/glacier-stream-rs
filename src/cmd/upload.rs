@@ -1,7 +1,7 @@
 use crate::result::{Error as EasyError, Result as EasyResult};
 use crate::size::SizeSpec;
 use crate::util::client::get_client;
-use crate::util::tree_hash::TreeHash;
+use crate::util::tree_hash::RandomInsertTreeHash;
 use crate::util::vault::{GlacierVaultSpec, parse_glacier_vault_arn};
 use aws_sdk_glacier::client::Client as GlacierClient;
 use aws_sdk_glacier::operation::complete_multipart_upload::CompleteMultipartUploadOutput;
@@ -195,7 +195,7 @@ async fn tree_hash_worker(
     abort_chan: AbortTxChannel,
     part_size: u64,
 ) -> EasyResult<[u8; 32]> {
-    let mut tree_hash = TreeHash::new(part_size);
+    let mut tree_hash = RandomInsertTreeHash::new(part_size);
     let res = tree_hash_loop(chan, &mut tree_hash).await;
     if let Err(e) = res {
         abort_chan.send(()).await?;
@@ -204,7 +204,7 @@ async fn tree_hash_worker(
     tree_hash.compute_hash().map_err(|e| e.into())
 }
 
-async fn tree_hash_loop(chan: ResultRxChannel, tree_hash: &mut TreeHash) -> EasyResult {
+async fn tree_hash_loop(chan: ResultRxChannel, tree_hash: &mut RandomInsertTreeHash) -> EasyResult {
     while let Some(part) = chan.recv().await? {
         tree_hash.try_insert(part.range_start, part.range_end + 1, part.checksum)?;
     }

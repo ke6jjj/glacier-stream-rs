@@ -8,7 +8,7 @@ pub struct HashLeaf {
     pub hash: [u8; 32],
 }
 
-pub struct TreeHash {
+pub struct RandomInsertTreeHash {
     have_end_leaf: bool,
     part_size: u64,
     map_by_start: std::collections::HashMap<u64, HashLeaf>,
@@ -37,9 +37,9 @@ struct HashDepth {
     depth: usize,
 }
 
-impl TreeHash {
+impl RandomInsertTreeHash {
     pub fn new(part_size: u64) -> Self {
-        TreeHash {
+        RandomInsertTreeHash {
             have_end_leaf: false,
             part_size,
             map_by_start: std::collections::HashMap::new(),
@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_hash_tree() {
-        let mut tree = TreeHash::new(4);
+        let mut tree = RandomInsertTreeHash::new(4);
         tree.try_insert(0, 4, [0; 32]).unwrap();
         tree.try_insert(4, 8, [1; 32]).unwrap();
         let hash = tree.compute_hash().unwrap();
@@ -158,7 +158,7 @@ mod tests {
     // Test unaligned leaf start
     #[test]
     fn test_unaligned_leaf_start() {
-        let mut tree = TreeHash::new(4);
+        let mut tree = RandomInsertTreeHash::new(4);
         let result = tree.try_insert(1, 5, [0; 32]);
         assert!(matches!(result, Err(TreeHashError::UnalignedLeafStart(1))));
     }
@@ -166,7 +166,7 @@ mod tests {
     // Test leaf too big
     #[test]
     fn test_leaf_too_big() {
-        let mut tree = TreeHash::new(4);
+        let mut tree = RandomInsertTreeHash::new(4);
         let result = tree.try_insert(0, 5, [0; 32]);
         assert!(matches!(result, Err(TreeHashError::LeafTooBig)));
     }
@@ -174,7 +174,7 @@ mod tests {
     // Test multiple short leaves
     #[test]
     fn test_multiple_short_leaves() {
-        let mut tree = TreeHash::new(4);
+        let mut tree = RandomInsertTreeHash::new(4);
         tree.try_insert(0, 2, [0; 32]).unwrap();
         let result = tree.try_insert(4, 6, [0; 32]);
         assert!(matches!(result, Err(TreeHashError::MultipleShortLeaves)));
