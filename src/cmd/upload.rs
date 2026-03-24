@@ -59,15 +59,73 @@ struct UploadContext {
 
 type WorkRxChannel = tokio_mpmc::Receiver<UploadPart>;
 type WorkTxChannel = tokio_mpmc::Sender<UploadPart>;
-type WorkChannel = (WorkTxChannel, WorkRxChannel);
+
+struct WorkQueue {
+    tx: WorkTxChannel,
+    rx: WorkRxChannel,
+}
+
+impl From<(WorkTxChannel, WorkRxChannel)> for WorkQueue {
+    fn from(channels: (WorkTxChannel, WorkRxChannel)) -> Self {
+        WorkQueue {
+            tx: channels.0,
+            rx: channels.1,
+        }
+    }
+}
+
+impl WorkQueue {
+    fn shutdown(&self) {
+        self.tx.close();
+    }
+}
 
 type ResultTxChannel = tokio_mpmc::Sender<UploadResult>;
 type ResultRxChannel = tokio_mpmc::Receiver<UploadResult>;
-type ResultChannel = (ResultTxChannel, ResultRxChannel);
+
+struct ResultQueue {
+    tx: ResultTxChannel,
+    rx: ResultRxChannel,
+}
+
+impl From<(ResultTxChannel, ResultRxChannel)> for ResultQueue {
+    fn from(channels: (ResultTxChannel, ResultRxChannel)) -> Self {
+        ResultQueue {
+            tx: channels.0,
+            rx: channels.1,
+        }
+    }
+}
+
+impl ResultQueue {
+    fn shutdown(&self) {
+        self.tx.close();
+    }
+}
 
 type AbortTxChannel = tokio_mpmc::Sender<()>;
 type AbortRxChannel = tokio_mpmc::Receiver<()>;
-type AbortChannel = (AbortTxChannel, AbortRxChannel);
+
+struct AbortQueue {
+    tx: AbortTxChannel,
+    rx: AbortRxChannel,
+}
+
+impl From<(AbortTxChannel, AbortRxChannel)> for AbortQueue {
+    fn from(channels: (AbortTxChannel, AbortRxChannel)) -> Self {
+        AbortQueue {
+            tx: channels.0,
+            rx: channels.1,
+        }
+    }
+}
+
+impl AbortQueue {
+    fn shutdown(&self) {
+        self.tx.close();
+    }
+}
+
 
 #[derive(Clone)]
 struct UploadWorkerContext {
@@ -86,27 +144,27 @@ pub enum ReadWorkerError {
     #[error("Failed to send work to upload worker:")]
     SendWorkFailed,
 }
-struct UploadManager {
+struct Uploader {
     upload_context: UploadContext,
     workers: usize,
-    work_channel: WorkChannel,
-    result_channel: ResultChannel,
-    abort_channel: AbortChannel,
+    work_queue: WorkQueue,
+    result_queue: ResultQueue,
+    abort_queue: AbortQueue,
     worker_tasks: JoinSet<EasyResult>,
     hash_task: JoinSet<EasyResult<[u8; 32]>>,
 }
 
-impl<'a> UploadManager {
+impl<'a> Uploader {
     pub fn new(workers: usize, upload_context: &UploadContext) -> Self {
-        let work_channel = channel::<UploadPart>(workers);
-        let result_channel = channel::<UploadResult>(workers);
-        let abort_channel = channel::<()>(1);
-        UploadManager {
+        let work_queue: WorkQueue = channel::<UploadPart>(workers).into();
+        let result_queue: ResultQueue = channel::<UploadResult>(workers).into();
+        let abort_queue: AbortQueue = channel::<()>(1).into();
+        Uploader {
             upload_context: upload_context.clone(),
             workers,
-            work_channel,
-            result_channel,
-            abort_channel,
+            work_queue,
+            result_queue,
+            abort_queue,
             worker_tasks: JoinSet::new(),
             hash_task: JoinSet::new(),
         }
@@ -115,40 +173,42 @@ impl<'a> UploadManager {
     // Return a queue to which the read worker can send upload parts for
     // processing by the upload workers.
     pub fn work_tx_queue(&'a self) -> &'a WorkTxChannel {
-        &self.work_channel.0
+        &self.work_queue.tx
     }
 
     // Return a semaphone/queue that workers can post to in order to signal
     // that the upload should be aborted.
     pub fn abort_rx_queue(&'a self) -> &'a AbortRxChannel {
-        &self.abort_channel.1
+        &self.abort_queue.rx
     }
 
     pub async fn start(&mut self) {
         for _ in 0..self.workers {
             let work_context = UploadWorkerContext {
                 upload: self.upload_context.clone(),
-                work_queue: self.work_channel.1.clone(),
-                result_queue: self.result_channel.0.clone(),
-                abort_semaphore: self.abort_channel.0.clone(),
+                work_queue: self.work_queue.rx.clone(),
+                result_queue: self.result_queue.tx.clone(),
+                abort_semaphore: self.abort_queue.tx.clone(),
             };
             self.worker_tasks.spawn(upload_worker(work_context.clone()));
         }
         self.hash_task.spawn(tree_hash_worker(
-            self.result_channel.1.clone(),
-            self.abort_channel.0.clone(),
+            self.result_queue.rx.clone(),
+            self.abort_queue.tx.clone(),
             self.upload_context.part_size,
         ));
     }
 
     pub async fn finish(mut self) -> EasyResult<[u8; 32]> {
-        self.work_channel.0.close();
+        self.work_queue.shutdown();
         let results = self.worker_tasks.join_all().await;
         for result in results {
             result?;
         }
-        self.result_channel.0.close();
-        self.hash_task.join_next().await.unwrap()?
+        self.result_queue.shutdown();
+        let hash_result = self.hash_task.join_next().await.unwrap()?;
+        self.abort_queue.shutdown();
+        hash_result
     }
 }
 
@@ -265,7 +325,7 @@ impl Cmd {
         &self,
         upload_context: &UploadContext,
     ) -> EasyResult<CompleteMultipartUploadOutput> {
-        let mut uploader = UploadManager::new(self.workers, upload_context);
+        let mut uploader = Uploader::new(self.workers, upload_context);
 
         uploader.start().await;
         let tx = uploader.work_tx_queue();
