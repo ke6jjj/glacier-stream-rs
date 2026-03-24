@@ -141,20 +141,69 @@ struct DownloadedPart {
 
 type WorkRxChannel = tokio_mpmc::Receiver<DownloadWorkerCommand>;
 type WorkTxChannel = tokio_mpmc::Sender<DownloadWorkerCommand>;
-type WorkChannel = (WorkTxChannel, WorkRxChannel);
+
+struct WorkQueue {
+    tx: WorkTxChannel,
+    rx: WorkRxChannel,
+}
+
+impl From<(WorkTxChannel, WorkRxChannel)> for WorkQueue {
+    fn from((tx, rx): (WorkTxChannel, WorkRxChannel)) -> Self {
+        Self { tx, rx }
+    }
+}
+
+impl WorkQueue {
+    fn shutdown(&self) {
+        self.tx.close();
+    }
+}
 
 type ResultRxChannel = tokio_mpmc::Receiver<DownloadedPart>;
 type ResultTxChannel = tokio_mpmc::Sender<DownloadedPart>;
-type ResultChannel = (ResultTxChannel, ResultRxChannel);
+
+struct ResultQueue {
+    tx: ResultTxChannel,
+    rx: ResultRxChannel,
+}
+
+impl From<(ResultTxChannel, ResultRxChannel)> for ResultQueue {
+    fn from((tx, rx): (ResultTxChannel, ResultRxChannel)) -> Self {
+        Self { tx, rx }
+    }
+}
+
+impl ResultQueue {
+    fn shutdown(&self) {
+        self.tx.close();
+    }
+}
+
 
 type AbortRxChannel = tokio_mpmc::Receiver<()>;
 type AbortTxChannel = tokio_mpmc::Sender<()>;
-type AbortChannel = (AbortTxChannel, AbortRxChannel);
+
+struct AbortQueue {
+    tx: AbortTxChannel,
+    rx: AbortRxChannel,
+}
+
+impl From<(AbortTxChannel, AbortRxChannel)> for AbortQueue {
+    fn from((tx, rx): (AbortTxChannel, AbortRxChannel)) -> Self {
+        Self { tx, rx }
+    }
+}
+
+impl AbortQueue {
+    fn shutdown(&self) {
+        self.tx.close();
+    }
+}
 
 async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
-    let work_chan: WorkChannel = tokio_mpmc::channel(workers);
-    let result_chan: ResultChannel = tokio_mpmc::channel(workers);
-    let abort_chan: AbortChannel = tokio_mpmc::channel(workers);
+    let work_queue: WorkQueue = tokio_mpmc::channel(workers).into();
+    let result_queue: ResultQueue = tokio_mpmc::channel(workers).into();
+    let abort_queue: AbortQueue = tokio_mpmc::channel(workers).into();
     let mut download_worker_tasks = JoinSet::new();
     let mut output_worker_task = JoinSet::new();
     for _ in 0..workers {
@@ -162,9 +211,9 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
             client: job.client.clone(),
             vault_spec: job.vault_spec.clone(),
             job_id: job.job_id.clone(),
-            work_chan: work_chan.1.clone(),
-            result_chan: result_chan.0.clone(),
-            abort_chan: abort_chan.0.clone(),
+            work_chan: work_queue.rx.clone(),
+            result_chan: result_queue.tx.clone(),
+            abort_chan: abort_queue.tx.clone(),
             verbose: job.verbose,
         };
         download_worker_tasks.spawn(download_worker(worker_job));
@@ -172,23 +221,23 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
     let output_worker_job = OutputWorkerJob {
         total_size: job.total_size,
         tree_hash: job.tree_hash,
-        result_chan: result_chan.1.clone(),
-        abort_chan: abort_chan.0.clone(),
+        result_chan: result_queue.rx.clone(),
+        abort_chan: abort_queue.tx.clone(),
     };
     output_worker_task.spawn(output_worker(output_worker_job));
     for offset in (0..job.total_size).step_by(job.chunking_size as usize) {
-        if !abort_chan.1.is_empty() {
+        if !abort_queue.rx.is_empty() {
             break; // If an abort signal has been sent, stop sending more work
         }
         let size = std::cmp::min(job.chunking_size, job.total_size - offset);
         let cmd = DownloadWorkerCommand { offset, size };
-        work_chan.0.send(cmd).await?;
+        work_queue.tx.send(cmd).await?;
     }
-    work_chan.0.close(); // Signal workers that no more work will be sent
+    work_queue.shutdown();
     while let Some(res) = download_worker_tasks.join_next().await {
         res??; // Propagate any errors from workers
     }
-    result_chan.0.close(); // Signal output worker that no more results will be sent
+    result_queue.shutdown();
     while let Some(res) = output_worker_task.join_next().await {
         res??; // Propagate any errors from output worker
     }

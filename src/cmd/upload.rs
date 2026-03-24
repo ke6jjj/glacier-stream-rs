@@ -66,11 +66,8 @@ struct WorkQueue {
 }
 
 impl From<(WorkTxChannel, WorkRxChannel)> for WorkQueue {
-    fn from(channels: (WorkTxChannel, WorkRxChannel)) -> Self {
-        WorkQueue {
-            tx: channels.0,
-            rx: channels.1,
-        }
+    fn from((tx, rx): (WorkTxChannel, WorkRxChannel)) -> Self {
+        Self { tx, rx }
     }
 }
 
@@ -89,11 +86,8 @@ struct ResultQueue {
 }
 
 impl From<(ResultTxChannel, ResultRxChannel)> for ResultQueue {
-    fn from(channels: (ResultTxChannel, ResultRxChannel)) -> Self {
-        ResultQueue {
-            tx: channels.0,
-            rx: channels.1,
-        }
+    fn from((tx, rx): (ResultTxChannel, ResultRxChannel)) -> Self {
+        Self { tx, rx }
     }
 }
 
@@ -112,11 +106,8 @@ struct AbortQueue {
 }
 
 impl From<(AbortTxChannel, AbortRxChannel)> for AbortQueue {
-    fn from(channels: (AbortTxChannel, AbortRxChannel)) -> Self {
-        AbortQueue {
-            tx: channels.0,
-            rx: channels.1,
-        }
+    fn from((tx, rx): (AbortTxChannel, AbortRxChannel)) -> Self {
+        Self { tx, rx }
     }
 }
 
