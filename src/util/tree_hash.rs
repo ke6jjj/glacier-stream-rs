@@ -15,7 +15,7 @@ pub struct RandomInsertTreeHash {
 }
 
 #[derive(Debug, Error)]
-pub enum TreeHashError {
+pub enum RandomInsertTreeHashError {
     #[error("Invalid range: start {start} stop {stop}")]
     InvalidRange { start: u64, stop: u64 },
     #[error("Leaf overlap at start {start} stop {stop}")]
@@ -51,23 +51,23 @@ impl RandomInsertTreeHash {
         start: u64,
         stop: u64,
         hash: [u8; 32],
-    ) -> Result<(), TreeHashError> {
+    ) -> Result<(), RandomInsertTreeHashError> {
         if start >= stop {
-            return Err(TreeHashError::InvalidRange { start, stop });
+            return Err(RandomInsertTreeHashError::InvalidRange { start, stop });
         }
         if self.map_by_start.contains_key(&start) {
-            return Err(TreeHashError::LeafOverlap { start, stop });
+            return Err(RandomInsertTreeHashError::LeafOverlap { start, stop });
         }
         if !start.is_multiple_of(self.part_size) {
-            return Err(TreeHashError::UnalignedLeafStart(start));
+            return Err(RandomInsertTreeHashError::UnalignedLeafStart(start));
         }
         let size = stop - start;
         if size > self.part_size {
-            return Err(TreeHashError::LeafTooBig);
+            return Err(RandomInsertTreeHashError::LeafTooBig);
         }
         if size < self.part_size {
             if self.have_end_leaf {
-                return Err(TreeHashError::MultipleShortLeaves);
+                return Err(RandomInsertTreeHashError::MultipleShortLeaves);
             }
             self.have_end_leaf = true;
         }
@@ -76,9 +76,9 @@ impl RandomInsertTreeHash {
         Ok(())
     }
 
-    pub fn compute_hash(self) -> Result<[u8; 32], TreeHashError> {
+    pub fn compute_hash(self) -> Result<[u8; 32], RandomInsertTreeHashError> {
         if self.map_by_start.is_empty() {
-            return Err(TreeHashError::EmptyTree);
+            return Err(RandomInsertTreeHashError::EmptyTree);
         }
         let mut leaves: Vec<HashLeaf> = self.map_by_start.into_values().collect();
         leaves.sort_by_key(|leaf| leaf.start);
@@ -86,13 +86,13 @@ impl RandomInsertTreeHash {
         // Ensure that the leaves are non-overlapping and cover the range from 0 to the end of the last leaf
         for leaf in &leaves {
             if leaf.start < last_stop {
-                return Err(TreeHashError::LeafOverlap {
+                return Err(RandomInsertTreeHashError::LeafOverlap {
                     start: leaf.start,
                     stop: leaf.stop,
                 });
             }
             if leaf.start > last_stop {
-                return Err(TreeHashError::DataGap {
+                return Err(RandomInsertTreeHashError::DataGap {
                     start: last_stop,
                     stop: leaf.start,
                 });
@@ -160,7 +160,7 @@ mod tests {
     fn test_unaligned_leaf_start() {
         let mut tree = RandomInsertTreeHash::new(4);
         let result = tree.try_insert(1, 5, [0; 32]);
-        assert!(matches!(result, Err(TreeHashError::UnalignedLeafStart(1))));
+        assert!(matches!(result, Err(RandomInsertTreeHashError::UnalignedLeafStart(1))));
     }
 
     // Test leaf too big
@@ -168,7 +168,7 @@ mod tests {
     fn test_leaf_too_big() {
         let mut tree = RandomInsertTreeHash::new(4);
         let result = tree.try_insert(0, 5, [0; 32]);
-        assert!(matches!(result, Err(TreeHashError::LeafTooBig)));
+        assert!(matches!(result, Err(RandomInsertTreeHashError::LeafTooBig)));
     }
 
     // Test multiple short leaves
@@ -177,6 +177,6 @@ mod tests {
         let mut tree = RandomInsertTreeHash::new(4);
         tree.try_insert(0, 2, [0; 32]).unwrap();
         let result = tree.try_insert(4, 6, [0; 32]);
-        assert!(matches!(result, Err(TreeHashError::MultipleShortLeaves)));
+        assert!(matches!(result, Err(RandomInsertTreeHashError::MultipleShortLeaves)));
     }
 }
