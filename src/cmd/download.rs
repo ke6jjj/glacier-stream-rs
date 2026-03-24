@@ -146,7 +146,8 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
     let work_chan: WorkChannel = tokio_mpmc::channel(workers);
     let result_chan: ResultChannel = tokio_mpmc::channel(workers);
     let abort_chan: AbortChannel = tokio_mpmc::channel(workers);
-    let mut worker_tasks = JoinSet::new();
+    let mut download_worker_tasks = JoinSet::new();
+    let mut output_worker_task = JoinSet::new();
     for _ in 0..workers {
         let worker_job = DownloadWorkerJob {
             client: job.client.clone(),
@@ -156,7 +157,7 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
             result_chan: result_chan.0.clone(),
             abort_chan: abort_chan.0.clone(),
         };
-        worker_tasks.spawn(download_worker(worker_job));
+        download_worker_tasks.spawn(download_worker(worker_job));
     }
     let output_worker_job = OutputWorkerJob {
         total_size: job.total_size,
@@ -164,7 +165,7 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
         result_chan: result_chan.1.clone(),
         abort_chan: abort_chan.0.clone(),
     };
-    worker_tasks.spawn(output_worker(output_worker_job));
+    output_worker_task.spawn(output_worker(output_worker_job));
     for offset in (0..job.total_size).step_by(job.chunking_size as usize) {
         if ! abort_chan.1.is_empty() {
             break; // If an abort signal has been sent, stop sending more work
@@ -174,8 +175,12 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
         work_chan.0.send(cmd).await?;
     }
     work_chan.0.close(); // Signal workers that no more work will be sent
-    while let Some(res) = worker_tasks.join_next().await {
+    while let Some(res) = download_worker_tasks.join_next().await {
         res??; // Propagate any errors from workers
+    }
+    result_chan.0.close(); // Signal output worker that no more results will be sent
+    while let Some(res) = output_worker_task.join_next().await {
+        res??; // Propagate any errors from output worker
     }
     Ok(())
 }
