@@ -1,5 +1,5 @@
-use sha2::{Digest, Sha256};
 use thiserror::Error;
+use super::sequential::SequentialTreeHash;
 
 #[derive(Debug)]
 pub struct HashLeaf {
@@ -30,11 +30,6 @@ pub enum RandomInsertTreeHashError {
     DataGap { start: u64, stop: u64 },
     #[error("Empty tree cannot compute hash")]
     EmptyTree,
-}
-
-struct HashDepth {
-    hash: [u8; 32],
-    depth: usize,
 }
 
 impl RandomInsertTreeHash {
@@ -99,48 +94,18 @@ impl RandomInsertTreeHash {
             }
             last_stop = leaf.stop;
         }
-        let mut stack: Vec<HashDepth> = Vec::new();
+        let mut tree = SequentialTreeHash::new();
         for leaf in leaves {
-            let mut current = HashDepth {
-                hash: leaf.hash,
-                depth: 0,
-            };
-            while let Some(top) = stack.last() {
-                if top.depth == current.depth {
-                    let left = stack.pop().unwrap();
-                    let mut hasher = Sha256::new();
-                    hasher.update(left.hash);
-                    hasher.update(current.hash);
-                    current = HashDepth {
-                        hash: hasher.finalize().into(),
-                        depth: left.depth + 1,
-                    };
-                } else {
-                    break;
-                }
-            }
-            stack.push(current);
+            tree.insert(leaf.hash);
         }
-        while stack.len() > 1 {
-            let right = stack.pop().unwrap();
-            let left = stack.pop().unwrap();
-            let mut hasher = Sha256::new();
-            hasher.update(left.hash);
-            hasher.update(right.hash);
-            stack.push(HashDepth {
-                hash: hasher.finalize().into(),
-                depth: left.depth + 1,
-            });
-        }
-
-        // Placeholder for hash computation logic
-        Ok(stack.pop().unwrap().hash)
+        Ok(tree.finalize())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
 
     #[test]
     fn test_hash_tree() {
