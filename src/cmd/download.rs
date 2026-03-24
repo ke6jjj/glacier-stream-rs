@@ -173,7 +173,7 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
         let cmd = DownloadWorkerCommand { offset, size };
         work_chan.0.send(cmd).await?;
     }
-    drop(work_chan.0); // Close the work channel to signal no more work
+    work_chan.0.close(); // Signal workers that no more work will be sent
     while let Some(res) = worker_tasks.join_next().await {
         res??; // Propagate any errors from workers
     }
