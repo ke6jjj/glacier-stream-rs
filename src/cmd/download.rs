@@ -1,10 +1,10 @@
 use std::io::Write;
 
-use crate::util::tree_hash::SequentialTreeHash;
-use crate::util::tree_hash::AWS_TREE_HASH_PART_SIZE;
 use crate::result::{Error as EasyError, Result as EasyResult};
 use crate::size::SizeSpec;
 use crate::util::client::get_client;
+use crate::util::tree_hash::AWS_TREE_HASH_PART_SIZE;
+use crate::util::tree_hash::SequentialTreeHash;
 use crate::util::vault::{GlacierVaultSpec, parse_glacier_vault_arn};
 use anyhow::Ok;
 use aws_sdk_glacier::client::Client as GlacierClient;
@@ -177,7 +177,7 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
     };
     output_worker_task.spawn(output_worker(output_worker_job));
     for offset in (0..job.total_size).step_by(job.chunking_size as usize) {
-        if ! abort_chan.1.is_empty() {
+        if !abort_chan.1.is_empty() {
             break; // If an abort signal has been sent, stop sending more work
         }
         let size = std::cmp::min(job.chunking_size, job.total_size - offset);
@@ -198,7 +198,7 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
 async fn download_worker(job: DownloadWorkerJob) -> EasyResult<()> {
     if let Err(e) = download_worker_loop(&job).await {
         job.abort_chan.send(()).await.ok(); // Signal other workers to stop
-        return Err(e)
+        return Err(e);
     }
     Ok(())
 }
@@ -211,16 +211,27 @@ async fn download_worker_loop(job: &DownloadWorkerJob) -> EasyResult<()> {
     Ok(())
 }
 
-async fn download_part(job: &DownloadWorkerJob, cmd: DownloadWorkerCommand) -> EasyResult<DownloadedPart> {
+async fn download_part(
+    job: &DownloadWorkerJob,
+    cmd: DownloadWorkerCommand,
+) -> EasyResult<DownloadedPart> {
     if job.verbose {
-        eprintln!("Downloading bytes {}-{}...", cmd.offset, cmd.offset + cmd.size - 1);
+        eprintln!(
+            "Downloading bytes {}-{}...",
+            cmd.offset,
+            cmd.offset + cmd.size - 1
+        );
     }
     let output = job
         .client
         .get_job_output()
         .vault_name(job.vault_spec.vault_name())
         .job_id(&job.job_id)
-        .range(format!("bytes={}-{}", cmd.offset, cmd.offset + cmd.size - 1))
+        .range(format!(
+            "bytes={}-{}",
+            cmd.offset,
+            cmd.offset + cmd.size - 1
+        ))
         .send()
         .await?;
     let data = output.body.collect().await?.into_bytes().to_vec();
@@ -246,7 +257,7 @@ async fn download_part(job: &DownloadWorkerJob, cmd: DownloadWorkerCommand) -> E
 
 async fn output_worker(job: OutputWorkerJob) -> EasyResult<()> {
     if let Err(e) = output_worker_loop(&job).await {
-       job.abort_chan.send(()).await.ok(); // Signal other workers to stop
+        job.abort_chan.send(()).await.ok(); // Signal other workers to stop
         return Err(e);
     }
     Ok(())

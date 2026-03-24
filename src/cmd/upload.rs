@@ -235,9 +235,15 @@ impl Cmd {
         }
         let result = self.upload(&context).await?;
         if self.verbose {
-            eprint!("Archive tree checksum: {}", result.checksum().unwrap_or("??NOT-PRESENT??"));
+            eprint!(
+                "Archive tree checksum: {}",
+                result.checksum().unwrap_or("??NOT-PRESENT??")
+            );
         }
-        eprint!("Archive ID: {}", result.archive_id().unwrap_or("??NOT-PRESENT??"));
+        eprint!(
+            "Archive ID: {}",
+            result.archive_id().unwrap_or("??NOT-PRESENT??")
+        );
         Ok(())
     }
 
@@ -255,7 +261,10 @@ impl Cmd {
         Ok(upload_id.to_string())
     }
 
-    async fn upload(&self, upload_context: &UploadContext) -> EasyResult<CompleteMultipartUploadOutput> {
+    async fn upload(
+        &self,
+        upload_context: &UploadContext,
+    ) -> EasyResult<CompleteMultipartUploadOutput> {
         let mut uploader = UploadManager::new(self.workers, upload_context);
 
         uploader.start().await;
@@ -263,7 +272,8 @@ impl Cmd {
         let abort = uploader.abort_rx_queue();
         let total_size = self.read_worker(upload_context, tx, abort).await?;
         let checksum = uploader.finish().await?;
-        let output = self.complete_upload(upload_context, checksum, total_size)
+        let output = self
+            .complete_upload(upload_context, checksum, total_size)
             .await?;
         Ok(output)
     }

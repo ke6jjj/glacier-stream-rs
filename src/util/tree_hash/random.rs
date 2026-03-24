@@ -1,5 +1,5 @@
-use thiserror::Error;
 use super::sequential::SequentialTreeHash;
+use thiserror::Error;
 
 #[derive(Debug)]
 pub struct HashLeaf {
@@ -125,7 +125,10 @@ mod tests {
     fn test_unaligned_leaf_start() {
         let mut tree = RandomInsertTreeHash::new(4);
         let result = tree.try_insert(1, 5, [0; 32]);
-        assert!(matches!(result, Err(RandomInsertTreeHashError::UnalignedLeafStart(1))));
+        assert!(matches!(
+            result,
+            Err(RandomInsertTreeHashError::UnalignedLeafStart(1))
+        ));
     }
 
     // Test leaf too big
@@ -142,6 +145,9 @@ mod tests {
         let mut tree = RandomInsertTreeHash::new(4);
         tree.try_insert(0, 2, [0; 32]).unwrap();
         let result = tree.try_insert(4, 6, [0; 32]);
-        assert!(matches!(result, Err(RandomInsertTreeHashError::MultipleShortLeaves)));
+        assert!(matches!(
+            result,
+            Err(RandomInsertTreeHashError::MultipleShortLeaves)
+        ));
     }
 }

@@ -1,8 +1,8 @@
 use crate::result::Result as EasyResult;
-use crate::util::tree_hash::SequentialTreeHash;
 use crate::util::tree_hash::AWS_TREE_HASH_PART_SIZE;
-use std::io::{self, Read};
+use crate::util::tree_hash::SequentialTreeHash;
 use sha2::{Digest, Sha256};
+use std::io::{self, Read};
 
 /// Compute the tree hash of stdin, for comparison with uploaded archives.
 ///
@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 /// large files. This command computes the tree hash of a local stream
 /// (on stdin) so that it can be compared with the tree hash of an uploaded
 /// archive, ensuring that the upload is correct.
-/// 
+///
 /// Tree hashes are performed in parts and it is important that the part size
 /// used for the tree hash computation matches the part size used for the
 /// upload.

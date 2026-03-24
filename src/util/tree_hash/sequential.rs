@@ -24,9 +24,7 @@ impl Default for SequentialTreeHash {
 
 impl SequentialTreeHash {
     pub fn new() -> Self {
-        SequentialTreeHash {
-            stack: Vec::new(),
-        }
+        SequentialTreeHash { stack: Vec::new() }
     }
 
     pub fn insert(&mut self, hash: [u8; 32]) {

@@ -1,6 +1,6 @@
 use anyhow::Ok;
 use clap::{Parser, Subcommand};
-use glacier_stream::cmd::{list_parts, upload, download, tree_hash};
+use glacier_stream::cmd::{download, list_parts, tree_hash, upload};
 use glacier_stream::result::Result;
 
 #[derive(Debug, Parser)]
