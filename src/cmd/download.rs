@@ -241,6 +241,7 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
     while let Some(res) = output_worker_task.join_next().await {
         res??; // Propagate any errors from output worker
     }
+    abort_queue.shutdown();
     Ok(())
 }
 
