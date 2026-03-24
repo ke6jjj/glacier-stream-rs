@@ -51,6 +51,28 @@ environment. There should be plenty of information elsewhere on how to do so.
 
 ## Tree Hash mode
 
+# Size estimates
+
+AWS Glacier's upload architecture unfortunately forces a sender to commit
+to an upper bound on the size of the data being transmittted before starting
+and upload. This is an understandably frustrating task to complete when
+you're working with a data stream because the stream does not come with any
+size indicator itself. But the task is simplified a bit by the fact that
+you do not need to know the exact size of the stream you are uploading.
+
+Ultimately, your estimate is constrained by two facts:
+
+* If you overestimate the size, you will reduce upload speed.
+* If you underestimate the size, your upload will fail.
+
+In most situations, it's more important to get the data uploaded than it is
+to get it uploaded as fast as possible, so your best bet is to over-estimate.
+
+A comfortable rule of thumb is to simply add 50% to your best estimate. On
+average, doing so will ultimately give you a 100% safety factor as the
+logic which the utility uses to commit to a "part-size" (the limiting
+element of the protocol) will round it up to the next power of two.
+
 # Facts
 
 All other constraints aside, each Glacier upload worker can send data at
