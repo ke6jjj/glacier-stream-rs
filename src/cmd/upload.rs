@@ -152,7 +152,7 @@ impl<'a> UploadManager {
     }
 }
 
-async fn upload_worker<'a>(work_context: UploadWorkerContext) -> EasyResult<()> {
+async fn upload_worker(work_context: UploadWorkerContext) -> EasyResult<()> {
     let res = upload_loop(work_context.clone()).await;
     if let Err(e) = res {
         work_context.abort_semaphore.send(()).await?;

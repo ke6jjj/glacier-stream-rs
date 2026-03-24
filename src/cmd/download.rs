@@ -240,7 +240,7 @@ async fn download_part(job: &DownloadWorkerJob, cmd: DownloadWorkerCommand) -> E
     Ok(DownloadedPart {
         offset: cmd.offset,
         data,
-        tree_hash: tree_hash,
+        tree_hash,
     })
 }
 

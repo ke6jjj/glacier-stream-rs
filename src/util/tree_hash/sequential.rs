@@ -16,6 +16,12 @@ struct HashDepth {
     depth: usize,
 }
 
+impl Default for SequentialTreeHash {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SequentialTreeHash {
     pub fn new() -> Self {
         SequentialTreeHash {
