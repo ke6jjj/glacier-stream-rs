@@ -111,7 +111,6 @@ struct OutputWorkerJob {
     tree_hash: [u8; 32],
     result_chan: ResultRxChannel,
     abort_chan: AbortTxChannel,
-    verbose: bool,
 }
 
 #[derive(Clone)]
@@ -175,7 +174,6 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
         tree_hash: job.tree_hash,
         result_chan: result_chan.1.clone(),
         abort_chan: abort_chan.0.clone(),
-        verbose: job.verbose,
     };
     output_worker_task.spawn(output_worker(output_worker_job));
     for offset in (0..job.total_size).step_by(job.chunking_size as usize) {
