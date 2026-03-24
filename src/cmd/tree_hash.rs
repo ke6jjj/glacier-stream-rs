@@ -1,5 +1,6 @@
 use crate::result::Result as EasyResult;
 use crate::util::tree_hash::SequentialTreeHash;
+use crate::util::tree_hash::AWS_TREE_HASH_PART_SIZE;
 use std::io::{self, Read};
 use sha2::{Digest, Sha256};
 
@@ -20,8 +21,6 @@ pub struct Cmd {
     /// Be verbose. Show exact part size being used.
     verbose: bool,
 }
-
-const AWS_TREE_HASH_PART_SIZE: u64 = 1024 * 1024;
 
 impl Cmd {
     pub async fn run(&self) -> EasyResult<()> {
