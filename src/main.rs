@@ -1,8 +1,6 @@
 use anyhow::Ok;
 use clap::{Parser, Subcommand};
-use glacier_stream::cmd::list_parts;
-use glacier_stream::cmd::upload;
-use glacier_stream::cmd::download;
+use glacier_stream::cmd::{list_parts, upload, download, tree_hash};
 use glacier_stream::result::Result;
 
 #[derive(Debug, Parser)]
@@ -18,6 +16,7 @@ pub enum Cmd {
     Up(upload::Cmd),
     Down(download::Cmd),
     ListParts(list_parts::Cmd),
+    TreeHash(tree_hash::Cmd),
 }
 
 #[tokio::main]
@@ -32,6 +31,9 @@ async fn main() -> Result {
         }
         Cmd::ListParts(list_parts_cmd) => {
             list_parts_cmd.run().await?;
+        }
+        Cmd::TreeHash(tree_hash_cmd) => {
+            tree_hash_cmd.run().await?;
         }
     }
     Ok(())
