@@ -73,6 +73,12 @@ impl Cmd {
             .and_then(|h| h.try_into().ok())
             .ok_or_else(|| EasyError::msg("Job info missing or invalid tree hash"))?;
         let chunking_size = self.chunk_size.to_bytes();
+        if self.verbose {
+            eprintln!("Job info:");
+            eprintln!("  Archive size: {} bytes", total_size);
+            eprintln!("  Tree hash: {}", hex::encode(tree_hash));
+            eprintln!("  Chunking size: {} bytes", chunking_size);
+        }
         let job = DownloadJob {
             client,
             vault_spec: self.arn.clone(),
@@ -80,6 +86,7 @@ impl Cmd {
             total_size,
             chunking_size,
             tree_hash,
+            verbose: self.verbose,
         };
         Ok(job)
     }
@@ -95,6 +102,7 @@ struct DownloadJob {
     total_size: u64,
     chunking_size: u64,
     tree_hash: [u8; 32],
+    verbose: bool,
 }
 
 #[derive(Clone)]
@@ -103,6 +111,7 @@ struct OutputWorkerJob {
     tree_hash: [u8; 32],
     result_chan: ResultRxChannel,
     abort_chan: AbortTxChannel,
+    verbose: bool,
 }
 
 #[derive(Clone)]
@@ -113,6 +122,7 @@ struct DownloadWorkerJob {
     work_chan: WorkRxChannel,
     result_chan: ResultTxChannel,
     abort_chan: AbortTxChannel,
+    verbose: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -156,6 +166,7 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
             work_chan: work_chan.1.clone(),
             result_chan: result_chan.0.clone(),
             abort_chan: abort_chan.0.clone(),
+            verbose: job.verbose,
         };
         download_worker_tasks.spawn(download_worker(worker_job));
     }
@@ -164,6 +175,7 @@ async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
         tree_hash: job.tree_hash,
         result_chan: result_chan.1.clone(),
         abort_chan: abort_chan.0.clone(),
+        verbose: job.verbose,
     };
     output_worker_task.spawn(output_worker(output_worker_job));
     for offset in (0..job.total_size).step_by(job.chunking_size as usize) {
@@ -202,6 +214,9 @@ async fn download_worker_loop(job: &DownloadWorkerJob) -> EasyResult<()> {
 }
 
 async fn download_part(job: &DownloadWorkerJob, cmd: DownloadWorkerCommand) -> EasyResult<DownloadedPart> {
+    if job.verbose {
+        eprintln!("Downloading bytes {}-{}...", cmd.offset, cmd.offset + cmd.size - 1);
+    }
     let output = job
         .client
         .get_job_output()
