@@ -1,4 +1,11 @@
 use sha2::{Digest, Sha256};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum SequentialTreeHashError {
+    #[error("Tree hash is empty")]
+    EmptyTree,
+}
 
 pub struct SequentialTreeHash {
     stack: Vec<HashDepth>,
@@ -35,7 +42,10 @@ impl SequentialTreeHash {
         self.stack.push(current);
     }
 
-    pub fn finalize(mut self) -> [u8; 32] {
+    pub fn finalize(mut self) -> Result<[u8; 32], SequentialTreeHashError> {
+        if self.stack.is_empty() {
+            return Err(SequentialTreeHashError::EmptyTree);
+        }
         while self.stack.len() > 1 {
             let right = self.stack.pop().unwrap();
             let left = self.stack.pop().unwrap();
@@ -47,6 +57,6 @@ impl SequentialTreeHash {
                 depth: left.depth + 1,
             });
         }
-        self.stack.pop().unwrap().hash
+        Ok(self.stack.pop().unwrap().hash)
     }
 }

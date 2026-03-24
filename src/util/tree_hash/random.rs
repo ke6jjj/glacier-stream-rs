@@ -98,7 +98,7 @@ impl RandomInsertTreeHash {
         for leaf in leaves {
             tree.insert(leaf.hash);
         }
-        Ok(tree.finalize())
+        Ok(tree.finalize().expect("Tree must have been empty!"))
     }
 }
 
