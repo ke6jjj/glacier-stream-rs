@@ -1,4 +1,3 @@
-use std::f32::consts::E;
 use std::io::Write;
 
 use crate::util::tree_hash::SequentialTreeHash;
@@ -144,9 +143,9 @@ type AbortTxChannel = tokio_mpmc::Sender<()>;
 type AbortChannel = (AbortTxChannel, AbortRxChannel);
 
 async fn download(job: DownloadJob, workers: usize) -> EasyResult<()> {
-    let work_chan = tokio_mpmc::channel(workers);
-    let result_chan = tokio_mpmc::channel(workers);
-    let abort_chan = tokio_mpmc::channel(workers);
+    let work_chan: WorkChannel = tokio_mpmc::channel(workers);
+    let result_chan: ResultChannel = tokio_mpmc::channel(workers);
+    let abort_chan: AbortChannel = tokio_mpmc::channel(workers);
     let mut worker_tasks = JoinSet::new();
     for _ in 0..workers {
         let worker_job = DownloadWorkerJob {
@@ -250,6 +249,12 @@ async fn output_worker_loop(job: &OutputWorkerJob) -> EasyResult<()> {
             tree_hasher.insert(part.tree_hash);
             total_written += part.data.len() as u64;
         }
+    }
+    if total_written != job.total_size {
+        return Err(EasyError::msg(format!(
+            "Expected to write {} bytes but only wrote {} bytes",
+            job.total_size, total_written
+        )));
     }
     let final_tree_hash = tree_hasher.finalize()?;
     if final_tree_hash != job.tree_hash {
