@@ -11,14 +11,10 @@ use std::io::{self, Read};
 /// large files. This command computes the tree hash of a local stream
 /// (on stdin) so that it can be compared with the tree hash of an uploaded
 /// archive, ensuring that the upload is correct.
-///
-/// Tree hashes are performed in parts and it is important that the part size
-/// used for the tree hash computation matches the part size used for the
-/// upload.
 #[derive(Debug, clap::Parser)]
 pub struct Cmd {
     #[arg(short, long, default_value_t = false)]
-    /// Be verbose. Show exact part size being used.
+    /// Be verbose. Show total bytes read as well.
     verbose: bool,
 }
 
