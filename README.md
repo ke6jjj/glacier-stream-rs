@@ -20,14 +20,36 @@ your job. Example use cases include:
 
 # Usage
 
-Glacier-stream has three modes:
+Glacier-stream has three modes.
 
-* `up`: Stream data TO Glacier
-* `down`: Stream data FROM Glacier
-* `tree-hash`: Compute a "Tree Hash" to verify local data matches that in Glacier
+|Mode|Purpose|
+|-|-|
+| `up`   | Stream data TO Glacier |
+| `down` | Stream data FROM Glacier |
+| `tree-hash` | Compute a "Tree Hash" to verify local data matches that in Glacier |
 
 In addition to chosing a mode, the utility will also need AWS credentials
 to operate correctly when streaming.
+
+## Upload mode
+
+## Download mode
+
+## Tree Hash mode
+
+# Details
+
+This section describes common mechanics for some of the commands and how
+the utility obtains access tokens for AWS authorization.
+
+The stream upload mode requires a stream size estimate when uploading. The
+[Size Estimates](#size-estimates) section describes why the estimate is
+required and guides you in making a good estimate.
+
+Both the stream upload and download modes also require AWS access tokens with
+permission to interact with the AWS Glacier Vault in question. Setting up the
+environment so that glacier-stream can find the token material is further
+described in the [AWS Secrets Environment](#aws-secrets-environment) section.
 
 ## AWS Secrets Environment
 
@@ -44,12 +66,6 @@ scheme as the standard AWS CLI utilities, namely:
 
 It is beyond the scope of this README to describe how to set up the
 environment. There should be plenty of information elsewhere on how to do so.
-
-## Upload mode
-
-## Download mode
-
-## Tree Hash mode
 
 # Size estimates
 
