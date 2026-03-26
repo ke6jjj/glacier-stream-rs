@@ -5,6 +5,7 @@ use crate::size::SizeSpec;
 use crate::util::client::get_client;
 use crate::util::tree_hash::AWS_TREE_HASH_PART_SIZE;
 use crate::util::tree_hash::SequentialTreeHash;
+use crate::util::tree_hash::ReservedTreeHash;
 use crate::util::vault::{GlacierVaultSpec, parse_glacier_vault_arn};
 use anyhow::Ok;
 use aws_sdk_glacier::client::Client as GlacierClient;
@@ -136,7 +137,7 @@ struct DownloadWorkerCommand {
 struct DownloadedPart {
     offset: u64,
     data: Vec<u8>,
-    tree_hash: [u8; 32],
+    tree_hash: ReservedTreeHash,
 }
 
 type WorkRxChannel = tokio_mpmc::Receiver<DownloadWorkerCommand>;
@@ -292,12 +293,19 @@ async fn download_part(
             data.len()
         )));
     }
-    let mut tree_hasher = SequentialTreeHash::new();
+    // Predict how this part will fit into the overall tree hash so
+    // we can reserve a sub-tree that will merge perfectly with the precursor
+    // tree.
+    let expected_precursor_depth: i64 = match cmd.offset.eq(&0) {
+        true => -1,
+        false => ((cmd.offset / AWS_TREE_HASH_PART_SIZE))
+            .trailing_zeros() as i64,
+    };
+    let mut tree_hash = ReservedTreeHash::new(expected_precursor_depth);
     for chunk in data.chunks(AWS_TREE_HASH_PART_SIZE as usize) {
         let hash = Sha256::digest(chunk);
-        tree_hasher.insert(hash.into());
+        tree_hash.insert(hash.into());
     }
-    let tree_hash = tree_hasher.finalize()?;
     Ok(DownloadedPart {
         offset: cmd.offset,
         data,
@@ -325,7 +333,8 @@ async fn output_worker_loop(job: &OutputWorkerJob) -> EasyResult<()> {
         // Write out any contiguous chunks starting from total_written
         while let Some(part) = chunk_map.remove(&total_written) {
             std::io::stdout().write_all(&part.data)?;
-            tree_hasher.insert(part.tree_hash);
+            part.tree_hash.merge_into(&mut tree_hasher)
+                .expect("Merging part tree hash should never fail");
             total_written += part.data.len() as u64;
         }
     }
