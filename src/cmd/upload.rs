@@ -204,7 +204,7 @@ impl<'a> Uploader {
 }
 
 async fn upload_worker(work_context: UploadWorkerContext) -> EasyResult<()> {
-    let res = upload_loop(work_context.clone()).await;
+    let res = upload_worker_loop(work_context.clone()).await;
     if let Err(e) = res {
         work_context.abort_semaphore.send(()).await?;
         return Err(e);
@@ -212,7 +212,7 @@ async fn upload_worker(work_context: UploadWorkerContext) -> EasyResult<()> {
     Ok(())
 }
 
-async fn upload_loop(work_context: UploadWorkerContext) -> EasyResult<()> {
+async fn upload_worker_loop(work_context: UploadWorkerContext) -> EasyResult<()> {
     while let Some(part) = work_context.work_queue.recv().await? {
         let range_spec = format!("bytes {}-{}/*", part.range_start, part.range_end);
         let result = work_context
@@ -247,7 +247,7 @@ async fn tree_hash_worker(
     part_size: u64,
 ) -> EasyResult<[u8; 32]> {
     let mut tree_hash = RandomInsertTreeHash::new(part_size);
-    let res = tree_hash_loop(chan, &mut tree_hash).await;
+    let res = tree_hash_worker_loop(chan, &mut tree_hash).await;
     if let Err(e) = res {
         abort_chan.send(()).await?;
         return Err(e);
@@ -255,7 +255,7 @@ async fn tree_hash_worker(
     tree_hash.compute_hash().map_err(|e| e.into())
 }
 
-async fn tree_hash_loop(chan: ResultRxChannel, tree_hash: &mut RandomInsertTreeHash) -> EasyResult {
+async fn tree_hash_worker_loop(chan: ResultRxChannel, tree_hash: &mut RandomInsertTreeHash) -> EasyResult {
     while let Some(part) = chan.recv().await? {
         tree_hash.try_insert(part.range_start, part.range_end + 1, part.checksum)?;
     }
@@ -284,7 +284,7 @@ impl Cmd {
         if self.verbose {
             eprint!("Using {} workers.", self.workers);
         }
-        let result = self.upload(&context).await?;
+        let result = upload(self.workers, &context).await?;
         if self.verbose {
             eprint!(
                 "Archive tree checksum: {}",
@@ -311,74 +311,72 @@ impl Cmd {
         })?;
         Ok(upload_id.to_string())
     }
+}
 
-    async fn upload(
-        &self,
-        upload_context: &UploadContext,
-    ) -> EasyResult<CompleteMultipartUploadOutput> {
-        let mut uploader = Uploader::new(self.workers, upload_context);
+async fn upload(
+    workers: usize,
+    upload_context: &UploadContext,
+) -> EasyResult<CompleteMultipartUploadOutput> {
+    let mut uploader = Uploader::new(workers, upload_context);
 
-        uploader.start().await;
-        let tx = uploader.work_tx_queue();
-        let abort = uploader.abort_rx_queue();
-        let total_size = self.read_worker(upload_context, tx, abort).await?;
-        let checksum = uploader.finish().await?;
-        let output = self
-            .complete_upload(upload_context, checksum, total_size)
-            .await?;
-        Ok(output)
-    }
+    uploader.start().await;
+    let tx = uploader.work_tx_queue();
+    let abort = uploader.abort_rx_queue();
+    let total_size = read_worker(upload_context, tx, abort).await?;
+    let checksum = uploader.finish().await?;
+    let output =
+        complete_upload(upload_context, checksum, total_size)
+        .await?;
+    Ok(output)
+}
 
-    async fn read_worker(
-        &self,
-        upload_context: &UploadContext,
-        tx: &WorkTxChannel,
-        abort: &AbortRxChannel,
-    ) -> Result<u64, ReadWorkerError> {
-        let mut buffer = Vec::new();
-        let mut total_read: u64 = 0;
-        loop {
-            if !abort.is_empty() {
-                return Err(ReadWorkerError::UploadAborted);
-            }
-
-            buffer.clear(); // Reuse buffer; otherwise read_to_end appends and memory grows without bound.
-            let mut chunk_reader = io::stdin().take(upload_context.part_size);
-            let bytes_read = chunk_reader.read_to_end(&mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-            let body = ByteStream::from(buffer[..bytes_read].to_vec());
-            let range_start = total_read;
-            let range_end = total_read + bytes_read as u64 - 1;
-            let part = UploadPart {
-                range_start,
-                range_end,
-                body,
-            };
-            total_read += bytes_read as u64;
-            tx.send(part)
-                .await
-                .map_err(|_| ReadWorkerError::SendWorkFailed)?;
+async fn read_worker(
+    upload_context: &UploadContext,
+    tx: &WorkTxChannel,
+    abort: &AbortRxChannel,
+) -> Result<u64, ReadWorkerError> {
+    let mut buffer = Vec::new();
+    let mut total_read: u64 = 0;
+    loop {
+        if !abort.is_empty() {
+            return Err(ReadWorkerError::UploadAborted);
         }
-        Ok(total_read)
-    }
 
-    async fn complete_upload(
-        &self,
-        upload_context: &UploadContext,
-        checksum: [u8; 32],
-        total_size: u64,
-    ) -> EasyResult<CompleteMultipartUploadOutput> {
-        let x = upload_context
-            .client
-            .complete_multipart_upload()
-            .vault_name(&upload_context.vault)
-            .upload_id(&upload_context.upload_id)
-            .archive_size(total_size.to_string())
-            .checksum(hex::encode(checksum))
-            .send()
-            .await?;
-        Ok(x)
+        buffer.clear(); // Reuse buffer; otherwise read_to_end appends and memory grows without bound.
+        let mut chunk_reader = io::stdin().take(upload_context.part_size);
+        let bytes_read = chunk_reader.read_to_end(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        let body = ByteStream::from(buffer[..bytes_read].to_vec());
+        let range_start = total_read;
+        let range_end = total_read + bytes_read as u64 - 1;
+        let part = UploadPart {
+            range_start,
+            range_end,
+            body,
+        };
+        total_read += bytes_read as u64;
+        tx.send(part)
+            .await
+            .map_err(|_| ReadWorkerError::SendWorkFailed)?;
     }
+    Ok(total_read)
+}
+
+async fn complete_upload(
+    upload_context: &UploadContext,
+    checksum: [u8; 32],
+    total_size: u64,
+) -> EasyResult<CompleteMultipartUploadOutput> {
+    let x = upload_context
+        .client
+        .complete_multipart_upload()
+        .vault_name(&upload_context.vault)
+        .upload_id(&upload_context.upload_id)
+        .archive_size(total_size.to_string())
+        .checksum(hex::encode(checksum))
+        .send()
+        .await?;
+    Ok(x)
 }
