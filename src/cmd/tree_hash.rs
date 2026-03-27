@@ -55,7 +55,7 @@ impl Cmd {
         if self.verbose {
             println!("Total bytes read: {}", total_read);
         }
-        for worker in worker_tasks.join_next().await {
+        while let Some(worker) = worker_tasks.join_next().await {
             worker??;
         }
         let tree_hash = collector_task.await??;
