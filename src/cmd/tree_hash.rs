@@ -52,12 +52,14 @@ impl Cmd {
             }).await?;
             total_read += bytes_read as u64;
         }
+        work_queue.tx.close();
         if self.verbose {
             println!("Total bytes read: {}", total_read);
         }
         while let Some(worker) = worker_tasks.join_next().await {
             worker??;
         }
+        result_queue.tx.close();
         let tree_hash = collector_task.await??;
         println!("Tree hash: {}", hex::encode(tree_hash));
         Ok(())
