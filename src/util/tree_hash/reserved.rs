@@ -25,7 +25,7 @@ impl ReservedTreeHash {
     }
 
     pub fn insert(&mut self, hash: [u8; 32]) {
-        if self.reserve.depth() < self.reserve_depth as i64 {
+        if self.reserve.depth() < self.reserve_depth {
             self.reserve.insert(hash);
         } else {
             self.main.insert(hash);

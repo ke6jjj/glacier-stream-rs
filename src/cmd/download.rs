@@ -298,7 +298,7 @@ async fn download_part(
     // tree.
     let expected_precursor_depth: i64 = match cmd.offset.eq(&0) {
         true => -1,
-        false => ((cmd.offset / AWS_TREE_HASH_PART_SIZE))
+        false => (cmd.offset / AWS_TREE_HASH_PART_SIZE)
             .trailing_zeros() as i64,
     };
     let mut tree_hash = ReservedTreeHash::new(expected_precursor_depth);
