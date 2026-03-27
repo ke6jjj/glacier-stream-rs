@@ -282,16 +282,14 @@ impl Cmd {
         };
         eprintln!("Upload ID: {}", context.upload_id);
         if self.verbose {
-            eprint!("Using {} workers.", self.workers);
+            eprintln!("Using {} workers.", self.workers);
         }
         let result = upload(self.workers, &context).await?;
-        if self.verbose {
-            eprint!(
-                "Archive tree checksum: {}",
-                result.checksum().unwrap_or("??NOT-PRESENT??")
-            );
-        }
-        eprint!(
+        eprintln!(
+            "Archive tree checksum: {}",
+            result.checksum().unwrap_or("??NOT-PRESENT??")
+        );
+        eprintln!(
             "Archive ID: {}",
             result.archive_id().unwrap_or("??NOT-PRESENT??")
         );
