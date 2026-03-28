@@ -2,6 +2,7 @@ pub mod arn;
 pub mod client;
 pub mod tree_hash;
 pub mod vault;
+pub mod tier;
 
 // Compute the best multipart upload part size for a given total archive size.
 pub fn part_size_for_size(size: u64) -> u64 {

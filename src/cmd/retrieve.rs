@@ -1,0 +1,37 @@
+use crate::result::{Error as EasyError, Result as EasyResult};
+use crate::util::client::get_client;
+use crate::util::tier::{RetrievalTier, parse_retrieval_tier};
+use crate::util::vault::{GlacierVaultSpec, parse_glacier_vault_arn};
+use aws_sdk_glacier::types::JobParameters;
+
+/// Initiate a retrieval job for an archive.
+#[derive(Debug, clap::Args)]
+pub struct Cmd {
+    #[arg(value_parser = parse_glacier_vault_arn)]
+    /// ARN for the vault.
+    /// Example: arn:aws:glacier:us-east-2:123456789012:vaults/video-archives
+    arn: GlacierVaultSpec,
+    /// Id of the archive to retrieve.
+    archive_id: String,
+    /// The retrieval tier for the job.
+    /// Valid values are "Expedited", "Standard", and "Bulk".
+    #[arg(value_parser = parse_retrieval_tier)]
+    tier: RetrievalTier,
+}
+
+impl Cmd {
+    pub async fn run(&self) -> EasyResult {
+        let client = get_client(&self.arn).await;
+        let input = JobParameters::builder()
+            .archive_id(&self.archive_id)
+            .r#type("archive-retrieval")
+            .tier(&self.tier)
+            .build();
+        let output = client.initiate_job().job_parameters(input).send().await?;
+        let job_id = output
+            .job_id()
+            .ok_or(EasyError::msg("No job id returned"))?;
+        println!("JobId: {}", job_id);
+        Ok(())
+    }
+}
