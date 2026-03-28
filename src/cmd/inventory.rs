@@ -18,7 +18,12 @@ impl Cmd {
         let input = JobParameters::builder()
             .r#type("inventory-retrieval")
             .build();
-        let output = client.initiate_job().job_parameters(input).send().await?;
+        let output = client
+            .initiate_job()
+            .vault_name(self.arn.vault_name())
+            .job_parameters(input)
+            .send()
+            .await?;
         let job_id = output
             .job_id()
             .ok_or(EasyError::msg("No job id returned"))?;
