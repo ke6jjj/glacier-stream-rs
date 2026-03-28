@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "glacier-stream"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "anyhow",
  "aws-config",
